@@ -182,7 +182,7 @@ function openEditDay(date){
   <button id="copyDay" type="button" class="btn dark" style="width:100%;margin-top:9px">⧉ Copier ces horaires vers un autre jour</button>
   <div class="detailPunches"><div class="head" style="padding-top:12px"><h3 style="margin:0">Pointages détaillés</h3><span class="badge">${punches.length}</span></div>${punches.map(p=>`<div class="detailPunch"><div>${label(p.type)}<small>${time(p.at)}</small></div><button class="btn small red iconDelete" data-delp="${p.id}" type="button">×</button></div>`).join("")}</div></div>`;
   document.getElementById("closeEdit").onclick=closePicker;document.getElementById("cancelEdit").onclick=closePicker;
-  ["editStart","editEnd","editBreak"].forEach(id=>{const el=document.getElementById(id);el.addEventListener("input",()=>{el.value=el.value.replace(/[^0-9:]/g,"").slice(0,5)});el.addEventListener("blur",()=>{el.value=normalizeHM(el.value,id==="editBreak")})});
+  ["editStart","editEnd","editBreak"].forEach(id=>{const el=document.getElementById(id);el.addEventListener("input",()=>{el.value=el.value.replace(/[^0-9:]/g,"").slice(0,5)});el.addEventListener("blur",()=>{el.value=normalizeHM(el.value)})});
   document.getElementById("saveEdit").onclick=()=>saveEditedDay(date);
   document.getElementById("copyDay").onclick=()=>openCopyDay(date);
   M.querySelectorAll("[data-delp]").forEach(b=>b.onclick=()=>{S.punches=S.punches.filter(p=>p.id!==b.dataset.delp);save();closePicker();render();toast("Pointage supprimé ✓")});
@@ -244,7 +244,7 @@ function copyDayToTarget(){
 }
 
 function saveEditedDay(date){
-  const a=parseHM(document.getElementById("editStart").value,false),b=parseHM(document.getElementById("editEnd").value,false),br=parseHM(document.getElementById("editBreak").value,true);
+  const a=parseHM(document.getElementById("editStart").value),b=parseHM(document.getElementById("editEnd").value),br=parseHM(document.getElementById("editBreak").value);
   if(!a||!b||!br){toast("Vérifie les horaires");return}
   const base=new Date(date+"T12:00:00"),start=new Date(base);start.setHours(a.h,a.m,0,0);const end=new Date(base);end.setHours(b.h,b.m,0,0);if(end<=start)end.setDate(end.getDate()+1);
   const duration=Math.round((end-start)/60000),breakMin=br.h*60+br.m;if(breakMin>=duration){toast("La pause est trop longue");return}
@@ -290,7 +290,9 @@ function salary(){
   </div></section>`;
 }
 
-function settings(){return `<header><div><div class="eyebrow">CONFIGURATION</div><h1 class="title">Réglages</h1></div><div class="logo">⚙</div></header>
+function settings(){
+const curInterim=interimCalc(new Date().getFullYear()+"-"+pad(new Date().getMonth()+1));
+return `<header><div><div class="eyebrow">CONFIGURATION</div><h1 class="title">Réglages</h1></div><div class="logo">⚙</div></header>
 <section class="card"><div class="head"><h2>Salaire</h2></div><div class="field"><label>Taux horaire brut (€)</label><input id="rate" type="number" step=".01" value="${S.settings.rate}"></div><div class="field"><label>Coefficient net estimé</label><input id="net" type="number" step=".01" value="${S.settings.net}"></div><div class="field"><label>Prélèvement à la source estimé (%)</label><input id="taxRate" type="number" step=".1" min="0" value="${S.settings.taxRate||0}"></div><div class="field"><label>13e mois — supplément brut €/heure</label><input id="thirteen" type="number" step=".01" value="${S.settings.thirteen}"></div><button id="saveSalary" class="btn purple" style="width:100%">Enregistrer</button></section>
 <section class="card"><div class="head"><h2>Heures supplémentaires</h2></div><div class="field"><label>Début des heures sup. (h/semaine)</label><input id="weekly" type="number" step=".1" value="${S.settings.weekly}"></div><div class="field"><label>Fin tranche +25% (h/semaine)</label><input id="ot25" type="number" step=".1" value="${S.settings.ot25}"></div><div class="grid2"><div class="field"><label>Majoration 1 (%)</label><input id="ot25pct" type="number" value="${S.settings.ot25pct}"></div><div class="field"><label>Majoration 2 (%)</label><input id="ot50pct" type="number" value="${S.settings.ot50pct}"></div></div><button id="saveOT" class="btn purple" style="width:100%">Enregistrer</button></section>
 <section class="card nightCard"><div class="head"><h2>Nuit</h2></div><div class="nightGrid"><div class="field nightField"><label>Début</label><input id="nightStart" type="time" value="${S.settings.nightStart}"></div><div class="field nightField"><label>Fin</label><input id="nightEnd" type="time" value="${S.settings.nightEnd}"></div></div><div class="field"><label>Majoration (%)</label><input id="nightPct" type="number" value="${S.settings.nightPct}"></div><button id="saveNight" class="btn purple" style="width:100%">Enregistrer</button></section>
@@ -298,7 +300,7 @@ function settings(){return `<header><div><div class="eyebrow">CONFIGURATION</div
 <div class="switchRow"><div><b>Activer le calcul intérim</b><small>Ajoute IFM et congés payés au calcul quand ils sont activés.</small></div><label class="switch"><input id="interimEnabled" type="checkbox" ${S.settings.interimEnabled!==false?"checked":""}><span></span></label></div>
 <div class="subCard"><div class="switchRow"><div><b>Prime de fin de mission (IFM)</b><small>Taux appliqué au brut de la période.</small></div><label class="switch"><input id="ifmEnabled" type="checkbox" ${S.settings.ifmEnabled!==false?"checked":""}><span></span></label></div><div class="field"><label>Taux IFM (%)</label><input id="ifmRate" type="number" min="0" step=".1" value="${S.settings.ifmRate}"></div><div class="field"><label>Mode</label><select id="ifmMode"><option value="pay" ${S.settings.ifmMode!=="cet"?"selected":""}>Versée avec le salaire</option><option value="cet" ${S.settings.ifmMode==="cet"?"selected":""}>Mise au CET</option></select></div></div>
 <div class="subCard"><div class="switchRow"><div><b>Indemnité de congés payés (ICCP)</b><small>Calculée selon le taux que tu définis.</small></div><label class="switch"><input id="iccpEnabled" type="checkbox" ${S.settings.iccpEnabled!==false?"checked":""}><span></span></label></div><div class="field"><label>Taux congés payés (%)</label><input id="iccpRate" type="number" min="0" step=".1" value="${S.settings.iccpRate}"></div><div class="field"><label>Mode</label><select id="iccpMode"><option value="pay" ${S.settings.iccpMode!=="cet"?"selected":""}>Versés avec le salaire</option><option value="cet" ${S.settings.iccpMode==="cet"?"selected":""}>Mis au CET</option></select></div></div>
-<div class="row"><span>IFM estimée ce mois</span><b>${eur(interimCalc(new Date().getFullYear()+"-"+pad(new Date().getMonth()+1)).ifm)}</b></div><div class="row"><span>Congés payés estimés ce mois</span><b>${eur(interimCalc(new Date().getFullYear()+"-"+pad(new Date().getMonth()+1)).iccp)}</b></div><div class="row"><span>CET cumulé</span><b>${eur(cetTotal())}</b></div><button id="saveInterim" class="btn purple" style="width:100%;margin-top:12px">Enregistrer les paramètres intérim</button></section>
+<div class="row"><span>IFM estimée ce mois</span><b>${eur(curInterim.ifm)}</b></div><div class="row"><span>Congés payés estimés ce mois</span><b>${eur(curInterim.iccp)}</b></div><div class="row"><span>CET cumulé</span><b>${eur(cetTotal())}</b></div><button id="saveInterim" class="btn purple" style="width:100%;margin-top:12px">Enregistrer les paramètres intérim</button></section>
 <section class="card"><div class="head"><h2>Primes & indemnités</h2></div><div class="primeForm"><div class="field"><label>Nom</label><input id="primeName" type="text"></div><div class="field"><label>Montant (€)</label><input id="primeAmount" type="number" inputmode="decimal" min="0" step="0.01"></div><div class="field"><label>Fiscalité</label><div class="taxChoice"><label><input type="radio" name="primeTax" value="taxable" checked><span>Soumis à l'impôt</span></label><label><input type="radio" name="primeTax" value="nontaxable"><span>Non soumis à l'impôt</span></label></div></div><button id="addPrime" type="button" class="btn purple" style="width:100%">＋ Ajouter la prime / indemnité</button></div>${S.settings.primes.length?S.settings.primes.map((p,i)=>`<div class="primeItem"><span class="primeDot"></span><div class="primeInfo"><div class="primeName">${esc(p.name)}</div><div class="primeMeta">${eur(p.amount)} · ${p.taxable?"Soumis à l'impôt":"Non soumis à l'impôt"}</div></div><button type="button" class="btn small red" data-prime="${i}">Supprimer</button></div>`).join(""):`<div class="empty">Aucune prime ou indemnité.</div>`}</section>
 <section class="card"><button id="reset" class="btn red" style="width:100%">Réinitialiser toutes les données</button></section>`}
 function esc(s){return String(s).replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#039;"}[c]))}
@@ -388,12 +390,12 @@ function drawDayForm(){
   ["manualStart","manualEnd","manualBreak"].forEach(id=>{
     const el=document.getElementById(id);
     el.addEventListener("input",()=>{el.value=el.value.replace(/[^0-9:]/g,"").slice(0,5);updateDayPreview()});
-    el.addEventListener("blur",()=>{el.value=normalizeHM(el.value,id==="manualBreak");updateSimplePicker();updateDayPreview()});
+    el.addEventListener("blur",()=>{el.value=normalizeHM(el.value);updateSimplePicker();updateDayPreview()});
   });
   document.getElementById("saveDay").onclick=saveWholeDay;
   updateDayPreview();
 }
-function parseHM(value,allowLongHour){
+function parseHM(value){
   let v=String(value||"").trim().replace(",",":").replace(".",":").replace(/[^0-9:]/g,"");
   if(!v)return null;
   let h,m;
@@ -404,19 +406,17 @@ function parseHM(value,allowLongHour){
   }else{
     h=parseInt(v.slice(0,-2),10);m=parseInt(v.slice(-2),10);
   }
-  if(!Number.isFinite(h)||!Number.isFinite(m)||h<0||m<0||m>59)return null;
-  if(!allowLongHour&&h>23)return null;
-  if(allowLongHour&&h>23)return null;
+  if(!Number.isFinite(h)||!Number.isFinite(m)||h<0||m<0||m>59||h>23)return null;
   return {h,m};
 }
-function normalizeHM(value,allowLongHour=false){
-  const x=parseHM(value,allowLongHour);
+function normalizeHM(value){
+  const x=parseHM(value);
   return x?pad(x.h)+":"+pad(x.m):"00:00";
 }
 function updateSimplePicker(){
   const a=document.getElementById("manualStart"),b=document.getElementById("manualEnd"),c=document.getElementById("manualBreak");
   if(!a||!b||!c)return;
-  const s=parseHM(a.value,false),e=parseHM(b.value,false),br=parseHM(c.value,true);
+  const s=parseHM(a.value),e=parseHM(b.value),br=parseHM(c.value);
   if(s){picker.startH=s.h;picker.startM=s.m}
   if(e){picker.endH=e.h;picker.endM=e.m}
   if(br){picker.breakH=br.h;picker.breakM=br.m}
@@ -428,9 +428,9 @@ function updateDayPreview(){
   el.innerHTML=`<b>${pad(picker.startH)}:${pad(picker.startM)} → ${pad(picker.endH)}:${pad(picker.endM)}</b><span>Pause : ${hm(brk)} · Travail : ${hm(total)}</span>`;
 }
 function saveWholeDay(){
-  const a=parseHM(document.getElementById("manualStart").value,false);
-  const b=parseHM(document.getElementById("manualEnd").value,false);
-  const br=parseHM(document.getElementById("manualBreak").value,true);
+  const a=parseHM(document.getElementById("manualStart").value);
+  const b=parseHM(document.getElementById("manualEnd").value);
+  const br=parseHM(document.getElementById("manualBreak").value);
   if(!a||!b||!br){toast("Vérifie les horaires : 08:00, 17:00 et 00:30");return}
   const base=new Date(picker.date);
   const start=new Date(base);start.setHours(a.h,a.m,0,0);
