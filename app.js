@@ -1,4 +1,4 @@
-/* V42 — premium redesign, mobile annual cards fixed */
+/* V43 — annual history shows only worked months */
 
 const KEY="heuresProV35";
 const OLD_KEYS=["heuresProV34","heuresProV33","heuresProV32","heuresProV31","heuresProV30","heuresProV29","heuresProV28","heuresProV27","heuresProV26","heuresProV25","heuresProV24"];
@@ -125,13 +125,15 @@ function annualHistory(){
   const currentYear=new Date().getFullYear();
   const year=annualYear;
   const months=yearStats(year);
+  const workedMonths=months.filter(x=>x.days>0);
   const total=months.reduce((a,x)=>{a.w+=x.w;a.n+=x.n;a.gross+=x.gross;a.net+=x.net;a.days+=x.days;return a},{w:0,n:0,gross:0,net:0,days:0});
   const labels=['Jan','Fév','Mar','Avr','Mai','Juin','Juil','Août','Sep','Oct','Nov','Déc'];
-  const max=Math.max(1,...months.map(x=>x.w));
+  const max=Math.max(1,...workedMonths.map(x=>x.w));
+  const count=workedMonths.length;
   return `<section class="card annualCard">
-    <div class="annualHead"><div><h2>Année ${year}</h2><p class="sectionNote">Vue complète des 12 mois</p></div><div class="annualYearNav"><button type="button" class="btn dark small" id="annualPrev" aria-label="Année précédente">‹</button><span class="badge">${total.days} jour${total.days>1?'s':''}</span><button type="button" class="btn dark small" id="annualNext" aria-label="Année suivante" ${year>=currentYear?'disabled':''}>›</button></div></div>
+    <div class="annualHead"><div><h2>Année ${year}</h2><p class="sectionNote">${count?`Mois travaillés : ${count}`:'Aucun mois travaillé pour le moment'}</p></div><div class="annualYearNav"><button type="button" class="btn dark small" id="annualPrev" aria-label="Année précédente">‹</button><span class="badge">${total.days} jour${total.days>1?'s':''}</span><button type="button" class="btn dark small" id="annualNext" aria-label="Année suivante" ${year>=currentYear?'disabled':''}>›</button></div></div>
     <div class="annualTotals"><div><small>HEURES</small><b>${hm(total.w)}</b></div><div><small>BRUT</small><b>${eur(total.gross)}</b></div><div><small>NET ESTIMÉ</small><b>${eur(total.net)}</b></div><div><small>NUIT</small><b>${hm(total.n)}</b></div></div>
-    <div class="annualChartWrap ${annualChartOpen?'open':'collapsed'}"><div class="annualChartHead"><div><b>Évolution annuelle</b><span class="chartSub">Heures travaillées par mois</span></div><button type="button" class="btn dark small chartToggle" id="annualChartToggle" aria-expanded="${annualChartOpen}" aria-controls="annualChartBody">${annualChartOpen?'Masquer':'Afficher'}</button></div><div id="annualChartBody" class="annualChartBody" ${annualChartOpen?'':'hidden'}><div class="annualChartScale">0 → ${hm(max)}</div><div class="annualBars" role="img" aria-label="Graphique des heures travaillées pour les douze mois de ${year}">${months.map((x,i)=>`<div class="annualBarCol"><div class="annualBarValue">${x.w?hm(x.w):''}</div><div class="annualBarTrack"><div class="annualBar" style="height:${x.w?Math.max(4,(x.w/max)*100):0}%"></div></div><div class="annualBarLabel">${labels[i]}</div></div>`).join('')}</div><div class="annualMonthCards">${months.map((x,i)=>`<div class="annualMonthCard"><div class="annualMonthCardName">${labels[i]}<small>${x.days?x.days+' jour'+(x.days>1?'s':''):'Aucun jour'}</small></div><div class="annualMonthMetric"><span><small>HEURES</small><b>${hm(x.w)}</b></span><span><small>NET</small><b>${eur(x.net)}</b></span></div></div>`).join('')}</div></div></div>
+    ${count?`<div class="annualChartWrap ${annualChartOpen?'open':'collapsed'}"><div class="annualChartHead"><div><b>Évolution annuelle</b><span class="chartSub">Heures travaillées par mois</span></div><button type="button" class="btn dark small chartToggle" id="annualChartToggle" aria-expanded="${annualChartOpen}" aria-controls="annualChartBody">${annualChartOpen?'Masquer':'Afficher'}</button></div><div id="annualChartBody" class="annualChartBody" ${annualChartOpen?'':'hidden'}><div class="annualChartScale">0 → ${hm(max)}</div><div class="annualBars" style="grid-template-columns:repeat(${count},minmax(0,1fr))" role="img" aria-label="Graphique des heures travaillées pour les mois travaillés de ${year}">${workedMonths.map(x=>`<div class="annualBarCol"><div class="annualBarValue">${hm(x.w)}</div><div class="annualBarTrack"><div class="annualBar" style="height:${Math.max(4,(x.w/max)*100)}%"></div></div><div class="annualBarLabel">${labels[x.m-1]}</div></div>`).join('')}</div><div class="annualMonthCards">${workedMonths.map(x=>`<div class="annualMonthCard"><div class="annualMonthCardName">${labels[x.m-1]}<small>${x.days} jour${x.days>1?'s':''}</small></div><div class="annualMonthMetric"><span><small>HEURES</small><b>${hm(x.w)}</b></span><span><small>NET</small><b>${eur(x.net)}</b></span></div></div>`).join('')}</div></div></div>`:`<div class="empty annualEmpty">Les mois apparaîtront automatiquement dès qu'une journée sera enregistrée.</div>`}
   </section>`;
 }
 function monthOptions(){

@@ -82,8 +82,8 @@ nav{background:#11151ddd;border-color:#2d3340}nav button.active{background:linea
 .annualMonthCards{display:grid;grid-template-columns:1fr 1fr;gap:7px;margin-top:14px}.annualMonthCard{display:grid;grid-template-columns:auto 1fr;align-items:center;gap:7px;padding:9px 10px;border:1px solid #35283f;background:#0d1016;border-radius:13px;min-width:0}.annualMonthCardName{font-size:12px;font-weight:900;text-transform:capitalize;min-width:36px}.annualMonthCardName small{display:block;color:var(--muted);font-size:8px;font-weight:700;margin-top:3px}.annualMonthMetric{display:grid;grid-template-columns:1fr 1fr;gap:6px;min-width:0}.annualMonthMetric span{min-width:0}.annualMonthMetric small{display:block;color:var(--muted);font-size:7px;font-weight:900;letter-spacing:.4px}.annualMonthMetric b{display:block;font-size:11px;margin-top:2px;white-space:nowrap}.annualMonthMetric span:last-child{text-align:right}@media(max-width:390px){.annualMonthCards{grid-template-columns:1fr}.annualMonthCard{padding:10px}.annualMonthMetric b{font-size:12px}}
 </style>
 
-<style id="annual-month-mobile-fix-v42">
-/* V42: annual month cards — mobile-safe layout */
+<style id="annual-month-mobile-fix-v43">
+/* V43: annual history — worked months only */
 .annualMonthCards{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:9px;margin-top:14px}
 .annualMonthCard{display:grid;grid-template-columns:58px minmax(0,1fr);align-items:center;gap:8px;min-width:0;padding:10px 11px;border:1px solid #35283f;background:#0d1016;border-radius:14px}
 .annualMonthCardName{min-width:0;font-size:12px;font-weight:900;text-transform:capitalize;white-space:nowrap}
@@ -100,6 +100,6 @@ nav{background:#11151ddd;border-color:#2d3340}nav button.active{background:linea
 <div id="app" class="app"></div>
 <nav><button class="active" data-page="home"><i>⌂</i>Accueil</button><button data-page="history"><i>▣</i>Historique</button><button data-page="salary"><i>€</i>Salaire</button><button data-page="settings"><i>⚙</i>Réglages</button></nav>
 <div id="modal" class="modal"></div><div id="toast" class="toast"></div>
-<script src="app.js?v=42"></script>
+<script src="app.js?v=43"></script>
 </body>
 </html>
