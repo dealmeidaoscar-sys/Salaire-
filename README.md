@@ -1,0 +1,19 @@
+# Heures Pro — V39
+
+Version PWA mobile pour le suivi des heures et de la rémunération.
+
+## V39
+- Audit et nettoyage de l’historique annuel.
+- Vue annuelle complète de janvier à décembre.
+- Navigation année précédente / suivante, avec blocage des années futures.
+- Graphique mensuel des heures travaillées.
+- Totaux annuels : heures, brut, net estimé, nuit et jours travaillés.
+- Détail mensuel : heures, brut et net.
+- Historique quotidien conservé avec ouverture/modification et suppression.
+- Boutons d’action de l’historique alignés à l’extrémité droite.
+- Service worker et cache V39.
+- Données existantes conservées via la clé de stockage historique.
+
+## Installation
+1. Remplacer les fichiers du dépôt GitHub Pages par les 7 fichiers de cette archive.
+2. Recharger l’application. Si une ancienne version reste affichée, fermer l’onglet/PWA puis la rouvrir.
