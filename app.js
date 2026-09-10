@@ -1,4 +1,4 @@
-/* V41 bis — premium redesign, logic preserved */
+/* V42 — premium redesign, mobile annual cards fixed */
 
 const KEY="heuresProV35";
 const OLD_KEYS=["heuresProV34","heuresProV33","heuresProV32","heuresProV31","heuresProV30","heuresProV29","heuresProV28","heuresProV27","heuresProV26","heuresProV25","heuresProV24"];

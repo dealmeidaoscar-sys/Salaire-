@@ -81,11 +81,25 @@ nav{background:#11151ddd;border-color:#2d3340}nav button.active{background:linea
 .historyMonthSummary{display:grid;grid-template-columns:1fr auto;align-items:center;gap:10px;margin-top:10px;padding:11px 13px;border:1px solid #35283f;background:#0d1016;border-radius:15px}.historyMonthSummary small{display:block;font-size:8px;font-weight:900;letter-spacing:.7px;color:var(--muted)}.historyMonthSummary b{display:block;margin-top:3px;font-size:14px;text-transform:capitalize}.historyStair{margin-top:12px;display:grid;gap:8px}.historyWeek,.historyDay{border:1px solid #35283f;background:#0d1016;border-radius:16px;overflow:hidden}.historyWeekHead,.historyDayHead{width:100%;min-height:60px;border:0;background:transparent;color:var(--text);display:flex;align-items:center;gap:10px;text-align:left;padding:10px 12px;cursor:pointer}.historyDayHead{min-height:54px;padding-left:14px}.historyChevron{width:22px;height:22px;display:grid;place-items:center;border-radius:7px;background:#252a36;color:#d7cde0;font-size:18px;line-height:1;flex:0 0 22px;transition:transform .18s ease}.historyWeek.open>.historyWeekHead .historyChevron,.historyDay.open>.historyDayHead .historyChevron{transform:rotate(90deg)}.historyWeekTitle,.historyDayTitle{min-width:0;flex:1}.historyWeekTitle b,.historyDayTitle b{display:block;font-size:13px}.historyWeekTitle small,.historyDayTitle small{display:block;color:var(--muted);font-size:10px;margin-top:3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.historyWeekHead .badge,.historyDayHead .badge{flex:0 0 auto}.historyDays{padding:0 8px 8px 30px;display:grid;gap:7px}.historyDay{background:#11141b;border-color:#30243a;border-radius:14px}.historyDayBody{padding:0 12px 12px 47px}.historyDayMeta{display:flex;flex-wrap:wrap;gap:6px;margin:0 0 9px}.historyDayMeta span{font-size:9px;color:var(--muted);padding:6px 8px;border-radius:9px;background:#1a1e28;border:1px solid #35283f}.historyDayActions{display:grid;grid-template-columns:1fr 1fr;gap:7px}.historyDayActions .btn{min-height:42px}.historyCard .head{align-items:flex-start}.historyCard .head>div{min-width:0}@media(max-width:390px){.historyDays{padding-left:20px}.historyDayBody{padding-left:35px}.historyWeekHead,.historyDayHead{padding-left:9px;padding-right:9px}.historyDayActions{grid-template-columns:1fr}.historyWeekHead .badge,.historyDayHead .badge{font-size:8px;padding:6px 7px}}
 .annualMonthCards{display:grid;grid-template-columns:1fr 1fr;gap:7px;margin-top:14px}.annualMonthCard{display:grid;grid-template-columns:auto 1fr;align-items:center;gap:7px;padding:9px 10px;border:1px solid #35283f;background:#0d1016;border-radius:13px;min-width:0}.annualMonthCardName{font-size:12px;font-weight:900;text-transform:capitalize;min-width:36px}.annualMonthCardName small{display:block;color:var(--muted);font-size:8px;font-weight:700;margin-top:3px}.annualMonthMetric{display:grid;grid-template-columns:1fr 1fr;gap:6px;min-width:0}.annualMonthMetric span{min-width:0}.annualMonthMetric small{display:block;color:var(--muted);font-size:7px;font-weight:900;letter-spacing:.4px}.annualMonthMetric b{display:block;font-size:11px;margin-top:2px;white-space:nowrap}.annualMonthMetric span:last-child{text-align:right}@media(max-width:390px){.annualMonthCards{grid-template-columns:1fr}.annualMonthCard{padding:10px}.annualMonthMetric b{font-size:12px}}
 </style>
+
+<style id="annual-month-mobile-fix-v42">
+/* V42: annual month cards — mobile-safe layout */
+.annualMonthCards{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:9px;margin-top:14px}
+.annualMonthCard{display:grid;grid-template-columns:58px minmax(0,1fr);align-items:center;gap:8px;min-width:0;padding:10px 11px;border:1px solid #35283f;background:#0d1016;border-radius:14px}
+.annualMonthCardName{min-width:0;font-size:12px;font-weight:900;text-transform:capitalize;white-space:nowrap}
+.annualMonthCardName small{display:block;color:var(--muted);font-size:8px;font-weight:700;margin-top:3px;white-space:nowrap}
+.annualMonthMetric{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:8px;min-width:0}
+.annualMonthMetric span{display:block!important;min-width:0!important;text-align:left!important}
+.annualMonthMetric span:last-child{text-align:right!important}
+.annualMonthMetric small{display:block;color:var(--muted);font-size:7px;font-weight:900;letter-spacing:.4px;line-height:1.1;white-space:nowrap}
+.annualMonthMetric b{display:block;font-size:11px;line-height:1.15;margin-top:3px;white-space:nowrap;letter-spacing:-.2px}
+@media(max-width:520px){.annualMonthCards{grid-template-columns:1fr;gap:8px}.annualMonthCard{grid-template-columns:64px minmax(0,1fr);padding:11px 12px}.annualMonthMetric{gap:12px}.annualMonthMetric b{font-size:12px}}
+</style>
 </head>
 <body>
 <div id="app" class="app"></div>
 <nav><button class="active" data-page="home"><i>⌂</i>Accueil</button><button data-page="history"><i>▣</i>Historique</button><button data-page="salary"><i>€</i>Salaire</button><button data-page="settings"><i>⚙</i>Réglages</button></nav>
 <div id="modal" class="modal"></div><div id="toast" class="toast"></div>
-<script src="app.js?v=41"></script>
+<script src="app.js?v=42"></script>
 </body>
 </html>
