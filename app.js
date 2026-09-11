@@ -1,4 +1,4 @@
-/* V46 — annual history filters to worked months only */
+/* V47 — salary labels and 13e mois breakdown corrected */
 
 const KEY="heuresProV35";
 const OLD_KEYS=["heuresProV34","heuresProV33","heuresProV32","heuresProV31","heuresProV30","heuresProV29","heuresProV28","heuresProV27","heuresProV26","heuresProV25","heuresProV24"];
@@ -67,7 +67,10 @@ function week(d){let a=[],x=new Date(weekStart(d)+"T12:00:00");for(let i=0;i<7;i
 function ot(d){let before=0;for(let x of week(d))if(x<d)before+=work(x);let cur=work(d),n=0,o25=0,o50=0;let a=S.settings.weekly*60,b=S.settings.ot25*60,totalBefore=before,total=before+cur;let p=Math.max(0,Math.min(total,b)-Math.max(totalBefore,a));o25=p;let q=Math.max(0,total-b)-Math.max(0,totalBefore-b);o50=Math.max(0,q);let used=o25+o50;n=Math.max(0,cur-used);return{n,o25,o50}}
 function daySalary(d){
   const w=work(d), n=night(d), o=ot(d), r=13.78;
-  const normalHours=o.n/60, nightHours=n/60;
+  const nightHours=n/60;
+  // Heures normales = heures travaillées hors nuit et hors heures supplémentaires.
+  // Les heures de nuit sont rémunérées sur leurs propres lignes.
+  const normalHours=Math.max(0,(w/60)-nightHours-(o.o25+o.o50)/60);
   const isTeam=(S.settings.teamDates||[]).includes(d), hasBasket=(S.settings.basketDates||[]).includes(d);
   const base=normalHours*r;
   const normal13=normalHours*1.84;
@@ -290,14 +293,14 @@ function salary(){
   </div>${c.cetCurrent?`<button id="addCet" class="btn purple compactBtn">Mettre ce mois au CET</button>`:""}</section>
   <section class="card compactSection"><div class="head"><h2>Détail du calcul</h2></div><div class="compactList">
     <div class="infoLine"><span>Salaire de base</span><b>${eur(tot.w/60*13.78)}</b></div>
-    <div class="infoLine"><span>Heures normales × 1,84 €</span><b>${eur(tot.normal13)}</b></div>
+    <div class="infoLine"><span>13e mois — heures normales × 1,84 €</span><b>${eur(tot.normal13)}</b></div>
     <div class="infoLine"><span>Prime équipe</span><b>${eur(tot.team)}</b></div>
-    <div class="infoLine"><span>Prime équipe × 1,93 €</span><b>${eur(tot.team13)}</b></div>
+    <div class="infoLine"><span>13e mois — prime équipe × 1,93 €</span><b>${eur(tot.team13)}</b></div>
     <div class="infoLine"><span>Habillage</span><b>${eur(tot.habillage)}</b></div>
-    <div class="infoLine"><span>Habillage × 0,47 €</span><b>${eur(tot.habillage13)}</b></div>
+    <div class="infoLine"><span>13e mois — habillage × 0,47 €</span><b>${eur(tot.habillage13)}</b></div>
     <div class="infoLine"><span>Heures de nuit × 13,78 €</span><b>${eur(tot.nightSalary)}</b></div>
     <div class="infoLine"><span>Majoration nuit × 6,89 €</span><b>${eur(tot.nightMajor)}</b></div>
-    <div class="infoLine"><span>Majoration nuit × 0,91 €</span><b>${eur(tot.nightMajor13)}</b></div>
+    <div class="infoLine"><span>13e mois — majoration nuit × 0,91 €</span><b>${eur(tot.nightMajor13)}</b></div>
     <div class="infoLine highlightRow"><span>Brut total</span><b>${eur(gross)}</b></div>
     <div class="infoLine"><span>Panier net × 7,50 €</span><b>${eur(tot.basket)}</b></div>
   </div></section>`;
@@ -305,11 +308,11 @@ function salary(){
 
 function settings(){return `<header><div><div class="eyebrow">CONFIGURATION</div><h1 class="title">Réglages</h1></div><div class="logo">⚙</div></header>
 <section class="card"><div class="head"><div><h2>Salaire</h2><p class="sectionNote">Barème réel configuré pour ton calcul.</p></div></div><div class="grid2">
-<div class="field"><label>Base</label><input value="13,78 € / h" disabled></div><div class="field"><label>Complément heures normales</label><input value="1,84 € / h" disabled></div>
-<div class="field"><label>Prime équipe</label><input value="14,50 € / jour" disabled></div><div class="field"><label>Complément équipe</label><input value="1,93 € / jour" disabled></div>
-<div class="field"><label>Habillage</label><input value="3,50 € / jour" disabled></div><div class="field"><label>Complément habillage</label><input value="0,47 € / jour" disabled></div>
+<div class="field"><label>Base</label><input value="13,78 € / h" disabled></div><div class="field"><label>13e mois — heures normales</label><input value="1,84 € / h" disabled></div>
+<div class="field"><label>Prime équipe</label><input value="14,50 € / jour" disabled></div><div class="field"><label>13e mois — prime équipe</label><input value="1,93 € / jour" disabled></div>
+<div class="field"><label>Habillage</label><input value="3,50 € / jour" disabled></div><div class="field"><label>13e mois — habillage</label><input value="0,47 € / jour" disabled></div>
 <div class="field"><label>Heures de nuit</label><input value="13,78 € / h" disabled></div><div class="field"><label>Majoration nuit</label><input value="6,89 € / h" disabled></div>
-<div class="field"><label>Complément majoration nuit</label><input value="0,91 € / h" disabled></div><div class="field"><label>Panier net</label><input value="7,50 € / jour" disabled></div></div>
+<div class="field"><label>13e mois — majoration nuit</label><input value="0,91 € / h" disabled></div><div class="field"><label>Panier net</label><input value="7,50 € / jour" disabled></div></div>
 <div class="field"><label>Coefficient net estimé</label><input id="net" type="number" step=".01" value="${S.settings.net}"></div><div class="field"><label>Prélèvement à la source estimé (%)</label><input id="taxRate" type="number" step=".1" min="0" value="${S.settings.taxRate||0}"></div><button id="saveSalary" class="btn purple" style="width:100%">Enregistrer</button></section>
 <section class="card"><div class="head"><div><h2>Jours équipe & panier</h2><p class="sectionNote">Pour le mois en cours, indique les dates concernées.</p></div></div>
 <div class="field"><label>Jours d'équipe</label><input id="teamDates" type="text" value="${(S.settings.teamDates||[]).filter(d=>d.startsWith(new Date().getFullYear()+"-"+pad(new Date().getMonth()+1))).join(", ")}" placeholder="2026-09-01, 2026-09-02"></div>

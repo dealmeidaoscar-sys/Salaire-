@@ -18,4 +18,4 @@ Version PWA mobile pour le suivi des heures et de la rémunération.
 1. Remplacer les fichiers du dépôt GitHub Pages par les 7 fichiers de cette archive.
 2. Recharger l’application. Si une ancienne version reste affichée, fermer l’onglet/PWA puis la rouvrir.
 
-V46: correction du chevauchement heures/net dans les cartes mensuelles annuelles, avec mise en page mobile une carte par ligne.
+V47: correction du chevauchement heures/net dans les cartes mensuelles annuelles, avec mise en page mobile une carte par ligne.
