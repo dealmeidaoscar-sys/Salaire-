@@ -1,8 +1,8 @@
-/* V45 — annual history filters to worked months only */
+/* V46 — salary calculation updated to user payroll formula */
 
 const KEY="heuresProV35";
 const OLD_KEYS=["heuresProV34","heuresProV33","heuresProV32","heuresProV31","heuresProV30","heuresProV29","heuresProV28","heuresProV27","heuresProV26","heuresProV25","heuresProV24"];
-const DEF={punches:[],settings:{rate:13.78,net:.78,taxRate:0,thirteen:0,weekly:35,nightStart:"20:00",nightEnd:"06:00",nightPct:25,ot25:43,ot25pct:25,ot50pct:50,primes:[],interimEnabled:true,ifmEnabled:true,ifmRate:10,ifmMode:"pay",iccpEnabled:true,iccpRate:10,iccpMode:"pay",cetEntries:[]}};
+const DEF={punches:[],settings:{rate:13.78,net:.78,taxRate:0,thirteen:0,weekly:35,nightStart:"20:00",nightEnd:"06:00",nightPct:25,ot25:43,ot25pct:25,ot50pct:50,primes:[],interimEnabled:true,ifmEnabled:true,ifmRate:10,ifmMode:"pay",iccpEnabled:true,iccpRate:10,iccpMode:"pay",cetEntries:[],monthDays:{}}};
 let S=load(),page="home",annualYear=new Date().getFullYear(),annualChartOpen=true,historyMonthKey=iso(new Date()).slice(0,7),historyOpenWeeks=new Set(),historyOpenDays=new Set(),picker={date:new Date(),month:new Date(),startH:8,startM:0,endH:17,endM:0,breakH:1,breakM:0},copyState={source:null,targets:new Set(),month:new Date()};
 
 function load(){
@@ -16,7 +16,7 @@ function load(){
     return structuredClone(DEF);
   }catch(e){return structuredClone(DEF)}
 }
-function merge(x){return {punches:Array.isArray(x.punches)?x.punches:[],settings:{...DEF.settings,...(x.settings||{}),primes:Array.isArray(x.settings?.primes)?x.settings.primes:[],cetEntries:Array.isArray(x.settings?.cetEntries)?x.settings.cetEntries:[]}}}
+function merge(x){return {punches:Array.isArray(x.punches)?x.punches:[],settings:{...DEF.settings,...(x.settings||{}),primes:Array.isArray(x.settings?.primes)?x.settings.primes:[],cetEntries:Array.isArray(x.settings?.cetEntries)?x.settings.cetEntries:[],monthDays:(x.settings?.monthDays&&typeof x.settings.monthDays==="object")?x.settings.monthDays:{}}}}
 function save(){localStorage.setItem(KEY,JSON.stringify(S))}
 function pad(n){return String(n).padStart(2,"0")}
 function iso(d){return d.getFullYear()+"-"+pad(d.getMonth()+1)+"-"+pad(d.getDate())}
@@ -65,36 +65,46 @@ function night(d){
 function weekStart(d){let x=new Date(d+"T12:00:00");x.setDate(x.getDate()-((x.getDay()+6)%7));return iso(x)}
 function week(d){let a=[],x=new Date(weekStart(d)+"T12:00:00");for(let i=0;i<7;i++){a.push(iso(x));x.setDate(x.getDate()+1)}return a}
 function ot(d){let before=0;for(let x of week(d))if(x<d)before+=work(x);let cur=work(d),n=0,o25=0,o50=0;let a=S.settings.weekly*60,b=S.settings.ot25*60,totalBefore=before,total=before+cur;let p=Math.max(0,Math.min(total,b)-Math.max(totalBefore,a));o25=p;let q=Math.max(0,total-b)-Math.max(0,totalBefore-b);o50=Math.max(0,q);let used=o25+o50;n=Math.max(0,cur-used);return{n,o25,o50}}
+function monthDayCounts(key){
+  const ds=[...new Set(S.punches.map(p=>p.date))].filter(d=>d.startsWith(key));
+  const worked=ds.length;
+  const saved=S.settings.monthDays?.[key]||{};
+  return {team:Math.max(0,Number.isFinite(+saved.team)?+saved.team:worked),basket:Math.max(0,Number.isFinite(+saved.basket)?+saved.basket:worked)};
+}
 function daySalary(d){
-  let w=work(d),n=night(d),o=ot(d),r=S.settings.rate;
-  let normal=o.n/60*r,p25=o.o25/60*r*(1+S.settings.ot25pct/100),p50=o.o50/60*r*(1+S.settings.ot50pct/100),np=n/60*r*S.settings.nightPct/100,th=w/60*S.settings.thirteen;
-  const active=S.settings.primes.filter(x=>x.enabled!==false);
-  const taxablePrimes=active.filter(x=>x.taxable!==false).reduce((a,x)=>a+Number(x.amount||0),0);
-  const nonTaxablePrimes=active.filter(x=>x.taxable===false).reduce((a,x)=>a+Number(x.amount||0),0);
-  const primes=taxablePrimes+nonTaxablePrimes;
-  const baseGross=normal+p25+p50+np+th+taxablePrimes;
-  const gross=baseGross;
-  const netBeforeTax=gross*S.settings.net;
-  const incomeTax=Math.max(0,netBeforeTax*Number(S.settings.taxRate||0)/100);
-  const netAfterTax=netBeforeTax-incomeTax;
-  const estimatedNet=netAfterTax+nonTaxablePrimes;
-  return{w,n,o,normal,p25,p50,np,th,primes,taxablePrimes,nonTaxablePrimes,baseGross,gross,netBeforeTax,incomeTax,netAfterTax,estimatedNet,ifm:0,iccp:0,paidInterim:0,cetInterim:0};
+  const w=work(d),n=Math.min(w,night(d)),normalMinutes=Math.max(0,w-n);
+  const r=13.78;
+  const normal=normalMinutes/60*r;
+  const thNormal=normalMinutes/60*1.84;
+  const nightSalary=n/60*r;
+  const thNight=n/60*1.93;
+  const nightPremium=n/60*6.89;
+  const thNightPremium=n/60*0.91;
+  const gross=normal+thNormal+nightSalary+thNight+nightPremium+thNightPremium;
+  return {w,n,normalMinutes,normal,thNormal,nightSalary,thNight,nightPremium,thNightPremium,gross,baseGross:gross,primes:0,taxablePrimes:0,nonTaxablePrimes:0,estimatedNet:gross*S.settings.net};
 }
 function monthSalaryBase(key){
-  let out={w:0,gross:0,th:0,pr:0,taxable:0,nontax:0};
+  let out={w:0,gross:0,normalHours:0,nightHours:0,thNormal:0,thNight:0,nightPremium:0,thNightPremium:0,team:0,teamPremium:0,dressing:0,basket:0,pr:0,taxable:0,nontax:0};
   let ds=[...new Set(S.punches.map(p=>p.date))].filter(d=>d.startsWith(key));
-  ds.forEach(d=>{let m=daySalary(d);out.w+=m.w;out.gross+=m.baseGross;out.th+=m.th;out.pr+=m.primes;out.taxable+=m.taxablePrimes;out.nontax+=m.nonTaxablePrimes});
+  ds.forEach(d=>{let m=daySalary(d);out.w+=m.w;out.gross+=m.gross;out.normalHours+=m.normalMinutes/60;out.nightHours+=m.n/60;out.thNormal+=m.thNormal;out.thNight+=m.thNight;out.nightPremium+=m.nightPremium;out.thNightPremium+=m.thNightPremium});
+  const counts=monthDayCounts(key);
+  out.team=counts.team;out.teamPremium=counts.team*14.50;out.thTeam=counts.team*0.47;out.dressing=ds.length*3.50;out.basket=counts.basket*7.50;
+  out.gross+=out.teamPremium+out.thTeam+out.dressing;
+  out.netBeforeTax=out.gross*S.settings.net;
+  out.tax=Math.max(0,out.netBeforeTax*Number(S.settings.taxRate||0)/100);
+  out.netAfterTax=out.netBeforeTax-out.tax;
+  out.received=out.netAfterTax+out.basket;
   return out;
 }
 function interimCalc(key){
   let base=monthSalaryBase(key);
-  if(!S.settings.interimEnabled)return {...base,ifm:0,iccp:0,paidIfm:0,paidIccp:0,cetIfm:0,cetIccp:0,cetCurrent:0,paidInterim:0,gross:base.gross,netBeforeTax:base.gross*S.settings.net,tax:Math.max(0,base.gross*S.settings.net*Number(S.settings.taxRate||0)/100)};
+  if(!S.settings.interimEnabled)return {...base,ifm:0,iccp:0,paidIfm:0,paidIccp:0,cetIfm:0,cetIccp:0,cetCurrent:0,paidInterim:0,gross:base.gross,netBeforeTax:base.netBeforeTax,tax:base.tax};
   let ifm=S.settings.ifmEnabled?base.gross*Math.max(0,Number(S.settings.ifmRate||0))/100:0;
   let iccp=S.settings.iccpEnabled?(base.gross+ifm)*Math.max(0,Number(S.settings.iccpRate||0))/100:0;
   let paidIfm=S.settings.ifmMode==='pay'?ifm:0,paidIccp=S.settings.iccpMode==='pay'?iccp:0;
   let cetIfm=S.settings.ifmMode==='cet'?ifm:0,cetIccp=S.settings.iccpMode==='cet'?iccp:0;
-  let paidInterim=paidIfm+paidIccp,gross=base.gross+paidInterim,netBeforeTax=gross*S.settings.net,tax=Math.max(0,netBeforeTax*Number(S.settings.taxRate||0)/100);
-  return {...base,ifm,iccp,paidIfm,paidIccp,cetIfm,cetIccp,cetCurrent:cetIfm+cetIccp,paidInterim,gross,netBeforeTax,tax};
+  let paidInterim=paidIfm+paidIccp;
+  return {...base,ifm,iccp,paidIfm,paidIccp,cetIfm,cetIccp,cetCurrent:cetIfm+cetIccp,paidInterim,gross:base.gross,netBeforeTax:base.netBeforeTax,tax:base.tax};
 }
 function cetTotal(){return (S.settings.cetEntries||[]).reduce((a,x)=>a+Number(x.total||0),0)}
 function cetHasMonth(key){return (S.settings.cetEntries||[]).some(x=>x.month===key)}
@@ -107,16 +117,16 @@ function addCurrentMonthToCET(){
 
 function label(t){return{start:"Début",pause:"Pause",resume:"Reprise",end:"Fin"}[t]||t}
 function render(){try{document.querySelectorAll("nav button").forEach(b=>b.classList.toggle("active",b.dataset.page===page));document.getElementById("app").innerHTML=page==="home"?home():page==="history"?history():page==="salary"?salary():settings();wire()}catch(err){console.error(err);toast("Erreur d'affichage, réessaie")}}
-function home(){let d=iso(new Date()),m=daySalary(d);return `<header><div><div class="eyebrow">${new Date().toLocaleDateString("fr-FR",{weekday:"long",day:"numeric",month:"long"})}</div><h1 class="title">Heures Pro</h1></div><div class="logo">⏱</div></header><section class="card hero"><div class="label">TEMPS TRAVAILLÉ AUJOURD'HUI</div><div class="big">${hm(m.w)}</div><div class="grid2"><button id="start" class="btn green">▶ Commencer</button><button id="pause" class="btn orange">Ⅱ Pause</button><button id="resume" class="btn purple">▶ Reprendre</button><button id="end" class="btn red">■ Terminer</button></div></section><section class="card"><div class="head"><h2>Pointages du jour</h2><span class="badge">AUJOURD'HUI</span></div>${ps(d).length?ps(d).map(p=>`<div class="punch"><div>${label(p.type)}<small>${time(p.at)}</small></div></div>`).join(""):`<div class="empty">Aucun pointage aujourd’hui.</div>`}</section><div class="stats"><div class="stat"><small>HEURES NORMALES</small><b>${hm(m.o.n)}</b></div><div class="stat"><small>HEURES DE NUIT</small><b>${hm(m.n)}</b></div><div class="stat"><small>SUP. +25%</small><b>${hm(m.o.o25)}</b></div><div class="stat"><small>SUP. +50%</small><b>${hm(m.o.o50)}</b></div></div><section class="card" style="margin-top:13px"><div class="head"><h2>Salaire du jour</h2><span class="badge">ESTIMATION</span></div><div class="row"><span>Brut</span><b>${eur(m.gross)}</b></div><div class="row"><span>Net estimé</span><b>${eur(m.estimatedNet)}</b></div></section>`}
+function home(){let d=iso(new Date()),m=daySalary(d),o=ot(d);return `<header><div><div class="eyebrow">${new Date().toLocaleDateString("fr-FR",{weekday:"long",day:"numeric",month:"long"})}</div><h1 class="title">Heures Pro</h1></div><div class="logo">⏱</div></header><section class="card hero"><div class="label">TEMPS TRAVAILLÉ AUJOURD'HUI</div><div class="big">${hm(m.w)}</div><div class="grid2"><button id="start" class="btn green">▶ Commencer</button><button id="pause" class="btn orange">Ⅱ Pause</button><button id="resume" class="btn purple">▶ Reprendre</button><button id="end" class="btn red">■ Terminer</button></div></section><section class="card"><div class="head"><h2>Pointages du jour</h2><span class="badge">AUJOURD'HUI</span></div>${ps(d).length?ps(d).map(p=>`<div class="punch"><div>${label(p.type)}<small>${time(p.at)}</small></div></div>`).join(""):`<div class="empty">Aucun pointage aujourd’hui.</div>`}</section><div class="stats"><div class="stat"><small>HEURES NORMALES</small><b>${hm(m.normalMinutes)}</b></div><div class="stat"><small>HEURES DE NUIT</small><b>${hm(m.n)}</b></div><div class="stat"><small>SUP. +25%</small><b>${hm(o.o25)}</b></div><div class="stat"><small>SUP. +50%</small><b>${hm(o.o50)}</b></div></div><section class="card" style="margin-top:13px"><div class="head"><h2>Salaire du jour</h2><span class="badge">ESTIMATION</span></div><div class="row"><span>Brut</span><b>${eur(m.gross)}</b></div><div class="row"><span>Net estimé</span><b>${eur(m.estimatedNet)}</b></div></section>`}
 function yearStats(year){
   const months=[];
   for(let m=1;m<=12;m++){
     const key=year+'-'+pad(m), c=interimCalc(key);
     const ds=[...new Set(S.punches.map(p=>p.date))].filter(d=>d.startsWith(key));
     let w=0,n=0,o25=0,o50=0;
-    ds.forEach(d=>{const x=daySalary(d);w+=x.w;n+=x.n;o25+=x.o.o25;o50+=x.o.o50});
+    ds.forEach(d=>{const x=daySalary(d),o=ot(d);w+=x.w;n+=x.n;o25+=o.o25;o50+=o.o50});
     const netAfterTax=Math.max(0,c.netBeforeTax-c.tax);
-    const received=netAfterTax+c.nontax;
+    const received=netAfterTax+c.basket+c.paidInterim;
     months.push({m,key,w,n,o25,o50,gross:c.gross,net:received,days:ds.length});
   }
   return months;
@@ -167,7 +177,7 @@ function history(){
   <section class="card historyCard"><div class="head"><div><h2>Jours travaillés</h2><p class="muted historyHint">Mois → semaines → jours. Ouvre un jour pour le modifier.</p></div><button id="addDay" class="btn purple small">＋ Ajouter</button></div>
   <div class="historySelector"><label for="historyMonth">Mois sélectionné</label><select id="historyMonth">${monthOptions()}</select></div>
   <div class="historyMonthSummary"><div><small>MOIS</small><b>${new Date(historyMonthKey+'-01T12:00:00').toLocaleDateString('fr-FR',{month:'long',year:'numeric'})}</b></div><div><small>JOURS</small><b>${totalDays}</b></div></div>
-  <div class="historyStair">${weeks.length?weeks.map(([ws,ds],wi)=>{const wkOpen=historyOpenWeeks.has(ws);const wkHours=ds.reduce((a,d)=>a+work(d),0);return `<div class="historyWeek ${wkOpen?'open':''}"><button type="button" class="historyWeekHead" data-week-toggle="${ws}" aria-expanded="${wkOpen}"><span class="historyChevron">›</span><span class="historyWeekTitle"><b>Semaine du ${weekLabel(ws)}</b><small>${ds.length} jour${ds.length>1?'s':''} · ${hm(wkHours)}</small></span><span class="badge">${wkOpen?'Masquer':'Voir'}</span></button>${wkOpen?`<div class="historyDays">${ds.map(d=>{const dayOpen=historyOpenDays.has(d),m=daySalary(d),p=ps(d),first=p.find(x=>x.type==='start'),last=[...p].reverse().find(x=>x.type==='end');return `<div class="historyDay ${dayOpen?'open':''}"><button type="button" class="historyDayHead" data-day-toggle="${d}" aria-expanded="${dayOpen}"><span class="historyChevron">›</span><span class="historyDayTitle"><b>${fmtD(d)}</b><small>${hm(m.w)} · ${first?time(first.at):'—'} → ${last?time(last.at):'—'}</small></span><span class="badge">${dayOpen?'Masquer':'Voir'}</span></button>${dayOpen?`<div class="historyDayBody"><div class="historyDayMeta"><span>${hm(m.n)} nuit</span><span>${hm(m.o.o25)} +25%</span><span>${hm(m.o.o50)} +50%</span></div><div class="historyDayActions"><button type="button" class="btn purple small" data-open-day="${d}">Modifier</button><button type="button" class="btn red small" data-delday="${d}">Supprimer</button></div></div>`:''}</div>`}).join('')}</div>`:''}</div>`}).join(''):`<div class="empty">Aucun jour enregistré pour ce mois.</div>`}</div></section>`;
+  <div class="historyStair">${weeks.length?weeks.map(([ws,ds],wi)=>{const wkOpen=historyOpenWeeks.has(ws);const wkHours=ds.reduce((a,d)=>a+work(d),0);return `<div class="historyWeek ${wkOpen?'open':''}"><button type="button" class="historyWeekHead" data-week-toggle="${ws}" aria-expanded="${wkOpen}"><span class="historyChevron">›</span><span class="historyWeekTitle"><b>Semaine du ${weekLabel(ws)}</b><small>${ds.length} jour${ds.length>1?'s':''} · ${hm(wkHours)}</small></span><span class="badge">${wkOpen?'Masquer':'Voir'}</span></button>${wkOpen?`<div class="historyDays">${ds.map(d=>{const dayOpen=historyOpenDays.has(d),m=daySalary(d),p=ps(d),first=p.find(x=>x.type==='start'),last=[...p].reverse().find(x=>x.type==='end');return `<div class="historyDay ${dayOpen?'open':''}"><button type="button" class="historyDayHead" data-day-toggle="${d}" aria-expanded="${dayOpen}"><span class="historyChevron">›</span><span class="historyDayTitle"><b>${fmtD(d)}</b><small>${hm(m.w)} · ${first?time(first.at):'—'} → ${last?time(last.at):'—'}</small></span><span class="badge">${dayOpen?'Masquer':'Voir'}</span></button>${dayOpen?`<div class="historyDayBody"><div class="historyDayMeta"><span>${hm(m.n)} nuit</span><span>${hm(o.o25)} +25%</span><span>${hm(o.o50)} +50%</span></div><div class="historyDayActions"><button type="button" class="btn purple small" data-open-day="${d}">Modifier</button><button type="button" class="btn red small" data-delday="${d}">Supprimer</button></div></div>`:''}</div>`}).join('')}</div>`:''}</div>`}).join(''):`<div class="empty">Aucun jour enregistré pour ce mois.</div>`}</div></section>`;
 }
 function openEditDay(date){
   const punches=ps(date),first=punches.find(p=>p.type==="start"),last=[...punches].reverse().find(p=>p.type==="end");
@@ -182,7 +192,7 @@ function openEditDay(date){
   <button id="copyDay" type="button" class="btn dark" style="width:100%;margin-top:9px">⧉ Copier ces horaires vers un autre jour</button>
   <div class="detailPunches"><div class="head" style="padding-top:12px"><h3 style="margin:0">Pointages détaillés</h3><span class="badge">${punches.length}</span></div>${punches.map(p=>`<div class="detailPunch"><div>${label(p.type)}<small>${time(p.at)}</small></div><button class="btn small red iconDelete" data-delp="${p.id}" type="button">×</button></div>`).join("")}</div></div>`;
   document.getElementById("closeEdit").onclick=closePicker;document.getElementById("cancelEdit").onclick=closePicker;
-  ["editStart","editEnd","editBreak"].forEach(id=>{const el=document.getElementById(id);el.addEventListener("input",()=>{el.value=el.value.replace(/[^0-9:]/g,"").slice(0,5)});el.addEventListener("blur",()=>{el.value=normalizeHM(el.value)})});
+  ["editStart","editEnd","editBreak"].forEach(id=>{const el=document.getElementById(id);el.addEventListener("input",()=>{el.value=el.value.replace(/[^0-9:]/g,"").slice(0,5)});el.addEventListener("blur",()=>{el.value=normalizeHM(el.value,id==="editBreak")})});
   document.getElementById("saveEdit").onclick=()=>saveEditedDay(date);
   document.getElementById("copyDay").onclick=()=>openCopyDay(date);
   M.querySelectorAll("[data-delp]").forEach(b=>b.onclick=()=>{S.punches=S.punches.filter(p=>p.id!==b.dataset.delp);save();closePicker();render();toast("Pointage supprimé ✓")});
@@ -244,7 +254,7 @@ function copyDayToTarget(){
 }
 
 function saveEditedDay(date){
-  const a=parseHM(document.getElementById("editStart").value),b=parseHM(document.getElementById("editEnd").value),br=parseHM(document.getElementById("editBreak").value);
+  const a=parseHM(document.getElementById("editStart").value,false),b=parseHM(document.getElementById("editEnd").value,false),br=parseHM(document.getElementById("editBreak").value,true);
   if(!a||!b||!br){toast("Vérifie les horaires");return}
   const base=new Date(date+"T12:00:00"),start=new Date(base);start.setHours(a.h,a.m,0,0);const end=new Date(base);end.setHours(b.h,b.m,0,0);if(end<=start)end.setDate(end.getDate()+1);
   const duration=Math.round((end-start)/60000),breakMin=br.h*60+br.m;if(breakMin>=duration){toast("La pause est trop longue");return}
@@ -255,52 +265,49 @@ function saveEditedDay(date){
 }
 
 function salary(){
-  let now=new Date(),mk=now.getFullYear()+"-"+pad(now.getMonth()+1),c=interimCalc(mk);
-  let ds=[...new Set(S.punches.map(p=>p.date))].filter(d=>d.startsWith(mk));
-  let tot={w:0,n:0,o25:0,o50:0,th:0,pr:0,taxable:0,nontax:0};
-  ds.forEach(d=>{let m=daySalary(d);tot.w+=m.w;tot.n+=m.n;tot.o25+=m.o.o25;tot.o50+=m.o.o50;tot.th+=m.th;tot.pr+=m.primes;tot.taxable+=m.taxablePrimes;tot.nontax+=m.nonTaxablePrimes});
-  let gross=c.gross,netBeforeTax=c.netBeforeTax,tax=c.tax,netAfterTax=netBeforeTax-tax,received=netAfterTax+tot.nontax;
-  let wg=0,wnet=0,ww=0,wn=0; week(iso(now)).forEach(d=>{let m=daySalary(d);wg+=m.gross;wnet+=m.estimatedNet;ww+=m.w;wn+=m.n});
+  const now=new Date(),mk=now.getFullYear()+"-"+pad(now.getMonth()+1),c=interimCalc(mk),ds=[...new Set(S.punches.map(p=>p.date))].filter(d=>d.startsWith(mk));
+  const counts=monthDayCounts(mk);
+  let wg=0,ww=0,wn=0;week(iso(now)).forEach(d=>{const m=daySalary(d);wg+=m.gross;ww+=m.w;wn+=m.n});
+  const netAfterTax=c.netBeforeTax-c.tax,received=netAfterTax+c.basket+c.paidInterim;
   return `<header><div><div class="eyebrow">RÉMUNÉRATION</div><h1 class="title">Salaire</h1></div><div class="logo">€</div></header>
-  <section class="card salaryHero"><div class="salaryHeroTop"><div><div class="label">NET À RECEVOIR ESTIMÉ</div><div class="salaryMain">${eur(received)}</div></div><span class="badge">${now.toLocaleDateString("fr-FR",{month:"long",year:"numeric"})}</span></div><div class="salaryHeroMeta"><span>${eur(gross)} brut</span><span>${hm(tot.w)} travaillées</span><span>${hm(tot.n)} de nuit</span></div></section>
-  <section class="card compactSection"><div class="head"><div><h2>Cette semaine</h2><p class="sectionNote">Vue rapide</p></div><span class="badge">ESTIMATION</span></div><div class="compactGrid"><div><small>BRUT</small><b>${eur(wg)}</b></div><div><small>NET</small><b>${eur(wnet)}</b></div><div><small>HEURES</small><b>${hm(ww)}</b></div><div><small>NUIT</small><b>${hm(wn)}</b></div></div></section>
-  <section class="card compactSection"><div class="head"><h2>Rémunération</h2></div><div class="salaryRows">
-    <div class="salaryRow"><span>Brut soumis</span><b>${eur(gross)}</b></div>
-    <div class="salaryRow"><span>Net avant impôt</span><b>${eur(netBeforeTax)}</b></div>
+  <section class="card salaryHero"><div class="salaryHeroTop"><div><div class="label">NET À RECEVOIR ESTIMÉ</div><div class="salaryMain">${eur(received)}</div></div><span class="badge">${now.toLocaleDateString("fr-FR",{month:"long",year:"numeric"})}</span></div><div class="salaryHeroMeta"><span>${eur(c.gross)} brut total</span><span>${hm(c.w)} travaillées</span><span>${hm(c.nightHours*60)} de nuit</span></div></section>
+  <section class="card compactSection"><div class="head"><div><h2>Jours du mois</h2><p class="sectionNote">Modifiables selon ta situation</p></div></div><div class="compactGrid"><div><small>TRAVAILLÉS</small><b>${ds.length}</b></div><div><small>ÉQUIPE</small><b>${counts.team}</b></div><div><small>PANIER</small><b>${counts.basket}</b></div><div><small>HABILLAGE</small><b>${ds.length}</b></div></div><div class="grid2" style="margin-top:12px"><div class="field"><label>Jours équipe</label><input id="monthTeam" type="number" min="0" step="1" value="${counts.team}"></div><div class="field"><label>Jours donnant droit au panier</label><input id="monthBasket" type="number" min="0" step="1" value="${counts.basket}"></div></div><button id="saveMonthDays" class="btn purple" style="width:100%">Enregistrer les jours</button></section>
+  <section class="card compactSection"><div class="head"><h2>Détail du brut</h2></div><div class="salaryRows">
+    <div class="salaryRow"><span>Salaire de base <small>${hm(c.normalHours*60)} normales × 13,78 €</small></span><b>${eur(c.normalHours*13.78)}</b></div>
+    <div class="salaryRow"><span>13e mois — heures normales <small>${c.normalHours.toFixed(2)} h × 1,84 €</small></span><b>${eur(c.thNormal)}</b></div>
+    <div class="salaryRow"><span>Prime équipe <small>${c.team} j × 14,50 €</small></span><b>${eur(c.teamPremium)}</b></div>
+    <div class="salaryRow"><span>13e mois — prime équipe <small>${c.team} j × 0,47 €</small></span><b>${eur(c.thTeam)}</b></div>
+    <div class="salaryRow"><span>Habillage <small>${ds.length} j × 3,50 €</small></span><b>${eur(c.dressing)}</b></div>
+    <div class="salaryRow"><span>Heures de nuit <small>${c.nightHours.toFixed(2)} h × 13,78 €</small></span><b>${eur(c.nightSalary)}</b></div>
+    <div class="salaryRow"><span>13e mois — heures de nuit <small>${c.nightHours.toFixed(2)} h × 1,93 €</small></span><b>${eur(c.thNight)}</b></div>
+    <div class="salaryRow"><span>Majoration nuit <small>${c.nightHours.toFixed(2)} h × 6,89 €</small></span><b>${eur(c.nightPremium)}</b></div>
+    <div class="salaryRow"><span>13e mois — majoration nuit <small>${c.nightHours.toFixed(2)} h × 0,91 €</small></span><b>${eur(c.thNightPremium)}</b></div>
+    <div class="salaryRow highlightRow"><span>Brut total</span><b>${eur(c.gross)}</b></div>
+  </div></section>
+  <section class="card compactSection"><div class="head"><h2>Net & indemnités</h2></div><div class="salaryRows">
+    <div class="salaryRow"><span>Net avant impôt</span><b>${eur(c.netBeforeTax)}</b></div>
     ${c.paidIfm?`<div class="salaryRow"><span>IFM versée <small>${S.settings.ifmRate}%</small></span><b>${eur(c.paidIfm)}</b></div>`:""}
     ${c.paidIccp?`<div class="salaryRow"><span>Congés payés versés <small>${S.settings.iccpRate}%</small></span><b>${eur(c.paidIccp)}</b></div>`:""}
-    <div class="salaryRow mutedRow"><span>Prélèvement estimé</span><b>− ${eur(tax)}</b></div>
+    <div class="salaryRow mutedRow"><span>Prélèvement estimé</span><b>− ${eur(c.tax)}</b></div>
     <div class="salaryRow"><span>Net après impôt</span><b>${eur(netAfterTax)}</b></div>
+    <div class="salaryRow"><span>Panier <small>${counts.basket} j × 7,50 € · net direct</small></span><b>${eur(c.basket)}</b></div>
     <div class="salaryRow highlightRow"><span>Net à recevoir</span><b>${eur(received)}</b></div>
   </div></section>
-  <section class="card compactSection"><div class="head"><div><h2>Intérim</h2><p class="sectionNote">Selon tes paramètres</p></div></div><div class="compactList">
-    <div class="infoLine"><span>IFM <small>${S.settings.ifmRate}%</small></span><b>${eur(c.ifm)}</b></div>
-    <div class="infoLine"><span>Congés payés <small>${S.settings.iccpRate}%</small></span><b>${eur(c.iccp)}</b></div>
-    ${c.paidIfm?`<div class="infoLine sub"><span>IFM versée</span><b>${eur(c.paidIfm)}</b></div>`:""}
-    ${c.paidIccp?`<div class="infoLine sub"><span>CP versés</span><b>${eur(c.paidIccp)}</b></div>`:""}
-    ${c.cetCurrent?`<div class="infoLine sub"><span>Mis au CET</span><b>${eur(c.cetCurrent)}</b></div>`:""}
-    ${cetTotal()?`<div class="infoLine sub"><span>CET cumulé</span><b>${eur(cetTotal())}</b></div>`:""}
+  <section class="card compactSection"><div class="head"><h2>Intérim</h2></div><div class="compactList">
+    <div class="infoLine"><span>IFM estimée</span><b>${eur(c.ifm)}</b></div><div class="infoLine"><span>Congés payés estimés</span><b>${eur(c.iccp)}</b></div>${c.cetCurrent?`<div class="infoLine sub"><span>Mis au CET</span><b>${eur(c.cetCurrent)}</b></div>`:""}${cetTotal()?`<div class="infoLine sub"><span>CET cumulé</span><b>${eur(cetTotal())}</b></div>`:""}
   </div>${c.cetCurrent?`<button id="addCet" class="btn purple compactBtn">Mettre ce mois au CET</button>`:""}</section>
-  <section class="card compactSection"><div class="head"><h2>Compléments</h2></div><div class="compactList">
-    <div class="infoLine"><span>Heures sup. +25%</span><b>${hm(tot.o25)}</b></div>
-    <div class="infoLine"><span>Heures sup. +50%</span><b>${hm(tot.o50)}</b></div>
-    <div class="infoLine"><span>13e mois</span><b>${eur(tot.th)}</b></div>
-    <div class="infoLine"><span>Primes soumises</span><b>${eur(tot.taxable)}</b></div>
-    <div class="infoLine"><span>Primes non soumises</span><b>${eur(tot.nontax)}</b></div>
-  </div></section>`;
+  <section class="card compactSection"><div class="head"><h2>Heures</h2></div><div class="compactList"><div class="infoLine"><span>Heures normales</span><b>${hm(c.normalHours*60)}</b></div><div class="infoLine"><span>Heures de nuit</span><b>${hm(c.nightHours*60)}</b></div></div></section>`;
 }
 
-function settings(){
-const curInterim=interimCalc(new Date().getFullYear()+"-"+pad(new Date().getMonth()+1));
-return `<header><div><div class="eyebrow">CONFIGURATION</div><h1 class="title">Réglages</h1></div><div class="logo">⚙</div></header>
-<section class="card"><div class="head"><h2>Salaire</h2></div><div class="field"><label>Taux horaire brut (€)</label><input id="rate" type="number" step=".01" value="${S.settings.rate}"></div><div class="field"><label>Coefficient net estimé</label><input id="net" type="number" step=".01" value="${S.settings.net}"></div><div class="field"><label>Prélèvement à la source estimé (%)</label><input id="taxRate" type="number" step=".1" min="0" value="${S.settings.taxRate||0}"></div><div class="field"><label>13e mois — supplément brut €/heure</label><input id="thirteen" type="number" step=".01" value="${S.settings.thirteen}"></div><button id="saveSalary" class="btn purple" style="width:100%">Enregistrer</button></section>
+function settings(){return `<header><div><div class="eyebrow">CONFIGURATION</div><h1 class="title">Réglages</h1></div><div class="logo">⚙</div></header>
+<section class="card"><div class="head"><div><h2>Calcul salaire</h2><p class="sectionNote">Formule fixe basée sur les montants de ta fiche de paie.</p></div></div><div class="compactList"><div class="infoLine"><span>Salaire de base</span><b>13,78 €/h</b></div><div class="infoLine"><span>13e mois heures normales</span><b>1,84 €/h</b></div><div class="infoLine"><span>Prime équipe</span><b>14,50 €/jour</b></div><div class="infoLine"><span>13e mois prime équipe</span><b>0,47 €/jour</b></div><div class="infoLine"><span>Habillage</span><b>3,50 €/jour</b></div><div class="infoLine"><span>Heures de nuit</span><b>13,78 €/h</b></div><div class="infoLine"><span>13e mois heures de nuit</span><b>1,93 €/h</b></div><div class="infoLine"><span>Majoration nuit</span><b>6,89 €/h</b></div><div class="infoLine"><span>13e mois majoration nuit</span><b>0,91 €/h</b></div><div class="infoLine"><span>Panier</span><b>7,50 €/jour · NET</b></div></div><div class="field" style="margin-top:12px"><label>Coefficient net estimé</label><input id="net" type="number" step=".01" min="0" value="${S.settings.net}"></div><div class="field"><label>Prélèvement à la source estimé (%)</label><input id="taxRate" type="number" step=".1" min="0" value="${S.settings.taxRate||0}"></div><button id="saveSalary" class="btn purple" style="width:100%">Enregistrer</button></section>
 <section class="card"><div class="head"><h2>Heures supplémentaires</h2></div><div class="field"><label>Début des heures sup. (h/semaine)</label><input id="weekly" type="number" step=".1" value="${S.settings.weekly}"></div><div class="field"><label>Fin tranche +25% (h/semaine)</label><input id="ot25" type="number" step=".1" value="${S.settings.ot25}"></div><div class="grid2"><div class="field"><label>Majoration 1 (%)</label><input id="ot25pct" type="number" value="${S.settings.ot25pct}"></div><div class="field"><label>Majoration 2 (%)</label><input id="ot50pct" type="number" value="${S.settings.ot50pct}"></div></div><button id="saveOT" class="btn purple" style="width:100%">Enregistrer</button></section>
 <section class="card nightCard"><div class="head"><h2>Nuit</h2></div><div class="nightGrid"><div class="field nightField"><label>Début</label><input id="nightStart" type="time" value="${S.settings.nightStart}"></div><div class="field nightField"><label>Fin</label><input id="nightEnd" type="time" value="${S.settings.nightEnd}"></div></div><div class="field"><label>Majoration (%)</label><input id="nightPct" type="number" value="${S.settings.nightPct}"></div><button id="saveNight" class="btn purple" style="width:100%">Enregistrer</button></section>
 <section class="card"><div class="head"><div><h2>Intérim — IFM & congés payés</h2><p class="sectionNote">Paramètres modifiables à ta guise. Ils sont repris automatiquement dans le calcul du salaire.</p></div></div>
 <div class="switchRow"><div><b>Activer le calcul intérim</b><small>Ajoute IFM et congés payés au calcul quand ils sont activés.</small></div><label class="switch"><input id="interimEnabled" type="checkbox" ${S.settings.interimEnabled!==false?"checked":""}><span></span></label></div>
 <div class="subCard"><div class="switchRow"><div><b>Prime de fin de mission (IFM)</b><small>Taux appliqué au brut de la période.</small></div><label class="switch"><input id="ifmEnabled" type="checkbox" ${S.settings.ifmEnabled!==false?"checked":""}><span></span></label></div><div class="field"><label>Taux IFM (%)</label><input id="ifmRate" type="number" min="0" step=".1" value="${S.settings.ifmRate}"></div><div class="field"><label>Mode</label><select id="ifmMode"><option value="pay" ${S.settings.ifmMode!=="cet"?"selected":""}>Versée avec le salaire</option><option value="cet" ${S.settings.ifmMode==="cet"?"selected":""}>Mise au CET</option></select></div></div>
 <div class="subCard"><div class="switchRow"><div><b>Indemnité de congés payés (ICCP)</b><small>Calculée selon le taux que tu définis.</small></div><label class="switch"><input id="iccpEnabled" type="checkbox" ${S.settings.iccpEnabled!==false?"checked":""}><span></span></label></div><div class="field"><label>Taux congés payés (%)</label><input id="iccpRate" type="number" min="0" step=".1" value="${S.settings.iccpRate}"></div><div class="field"><label>Mode</label><select id="iccpMode"><option value="pay" ${S.settings.iccpMode!=="cet"?"selected":""}>Versés avec le salaire</option><option value="cet" ${S.settings.iccpMode==="cet"?"selected":""}>Mis au CET</option></select></div></div>
-<div class="row"><span>IFM estimée ce mois</span><b>${eur(curInterim.ifm)}</b></div><div class="row"><span>Congés payés estimés ce mois</span><b>${eur(curInterim.iccp)}</b></div><div class="row"><span>CET cumulé</span><b>${eur(cetTotal())}</b></div><button id="saveInterim" class="btn purple" style="width:100%;margin-top:12px">Enregistrer les paramètres intérim</button></section>
+<div class="row"><span>IFM estimée ce mois</span><b>${eur(interimCalc(new Date().getFullYear()+"-"+pad(new Date().getMonth()+1)).ifm)}</b></div><div class="row"><span>Congés payés estimés ce mois</span><b>${eur(interimCalc(new Date().getFullYear()+"-"+pad(new Date().getMonth()+1)).iccp)}</b></div><div class="row"><span>CET cumulé</span><b>${eur(cetTotal())}</b></div><button id="saveInterim" class="btn purple" style="width:100%;margin-top:12px">Enregistrer les paramètres intérim</button></section>
 <section class="card"><div class="head"><h2>Primes & indemnités</h2></div><div class="primeForm"><div class="field"><label>Nom</label><input id="primeName" type="text"></div><div class="field"><label>Montant (€)</label><input id="primeAmount" type="number" inputmode="decimal" min="0" step="0.01"></div><div class="field"><label>Fiscalité</label><div class="taxChoice"><label><input type="radio" name="primeTax" value="taxable" checked><span>Soumis à l'impôt</span></label><label><input type="radio" name="primeTax" value="nontaxable"><span>Non soumis à l'impôt</span></label></div></div><button id="addPrime" type="button" class="btn purple" style="width:100%">＋ Ajouter la prime / indemnité</button></div>${S.settings.primes.length?S.settings.primes.map((p,i)=>`<div class="primeItem"><span class="primeDot"></span><div class="primeInfo"><div class="primeName">${esc(p.name)}</div><div class="primeMeta">${eur(p.amount)} · ${p.taxable?"Soumis à l'impôt":"Non soumis à l'impôt"}</div></div><button type="button" class="btn small red" data-prime="${i}">Supprimer</button></div>`).join(""):`<div class="empty">Aucune prime ou indemnité.</div>`}</section>
 <section class="card"><button id="reset" class="btn red" style="width:100%">Réinitialiser toutes les données</button></section>`}
 function esc(s){return String(s).replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#039;"}[c]))}
@@ -319,10 +326,11 @@ document.querySelectorAll("[data-editday]").forEach(b=>b.onclick=e=>{if(e.target
 document.querySelectorAll("[data-delday]").forEach(b=>b.onclick=e=>{e.stopPropagation();if(confirm("Supprimer toute cette journée ?")){S.punches=S.punches.filter(p=>p.date!==b.dataset.delday);save();render();toast("Journée supprimée ✓")}});
 document.querySelectorAll("[data-delp]").forEach(b=>b.onclick=()=>{S.punches=S.punches.filter(p=>p.id!==b.dataset.delp);save();render()});
 document.querySelectorAll("[data-prime]").forEach(b=>b.onclick=()=>{S.settings.primes.splice(+b.dataset.prime,1);save();render()});
-if(q("saveSalary"))q("saveSalary").onclick=()=>{S.settings.rate=+q("rate").value||0;S.settings.net=+q("net").value||0;S.settings.taxRate=Math.max(0,+q("taxRate").value||0);S.settings.thirteen=+q("thirteen").value||0;save();render();toast("Salaire enregistré ✓")};
+if(q("saveSalary"))q("saveSalary").onclick=()=>{S.settings.net=Math.max(0,+q("net").value||0);S.settings.taxRate=Math.max(0,+q("taxRate").value||0);save();render();toast("Salaire enregistré ✓")};
 if(q("saveOT"))q("saveOT").onclick=()=>{S.settings.weekly=+q("weekly").value||35;S.settings.ot25=+q("ot25").value||43;S.settings.ot25pct=+q("ot25pct").value||25;S.settings.ot50pct=+q("ot50pct").value||50;save();render();toast("Heures sup. enregistrées ✓")};
 if(q("saveNight"))q("saveNight").onclick=()=>{S.settings.nightStart=q("nightStart").value;S.settings.nightEnd=q("nightEnd").value;S.settings.nightPct=+q("nightPct").value||0;save();render();toast("Nuit enregistrée ✓")};
 if(q("saveInterim"))q("saveInterim").onclick=()=>{S.settings.interimEnabled=q("interimEnabled").checked;S.settings.ifmEnabled=q("ifmEnabled").checked;S.settings.ifmRate=Math.max(0,+q("ifmRate").value||0);S.settings.ifmMode=q("ifmMode").value;S.settings.iccpEnabled=q("iccpEnabled").checked;S.settings.iccpRate=Math.max(0,+q("iccpRate").value||0);S.settings.iccpMode=q("iccpMode").value;save();render();toast("Paramètres intérim enregistrés ✓")};
+if(q("saveMonthDays"))q("saveMonthDays").onclick=()=>{const key=new Date().getFullYear()+"-"+pad(new Date().getMonth()+1);S.settings.monthDays=S.settings.monthDays||{};S.settings.monthDays[key]={team:Math.max(0,Math.floor(+q("monthTeam").value||0)),basket:Math.max(0,Math.floor(+q("monthBasket").value||0))};save();render();toast("Jours enregistrés ✓")};
 if(q("addCet"))q("addCet").onclick=addCurrentMonthToCET;
 if(q("addPrime"))q("addPrime").onclick=()=>{
   const name=q("primeName").value.trim();
@@ -390,12 +398,12 @@ function drawDayForm(){
   ["manualStart","manualEnd","manualBreak"].forEach(id=>{
     const el=document.getElementById(id);
     el.addEventListener("input",()=>{el.value=el.value.replace(/[^0-9:]/g,"").slice(0,5);updateDayPreview()});
-    el.addEventListener("blur",()=>{el.value=normalizeHM(el.value);updateSimplePicker();updateDayPreview()});
+    el.addEventListener("blur",()=>{el.value=normalizeHM(el.value,id==="manualBreak");updateSimplePicker();updateDayPreview()});
   });
   document.getElementById("saveDay").onclick=saveWholeDay;
   updateDayPreview();
 }
-function parseHM(value){
+function parseHM(value,allowLongHour){
   let v=String(value||"").trim().replace(",",":").replace(".",":").replace(/[^0-9:]/g,"");
   if(!v)return null;
   let h,m;
@@ -406,17 +414,19 @@ function parseHM(value){
   }else{
     h=parseInt(v.slice(0,-2),10);m=parseInt(v.slice(-2),10);
   }
-  if(!Number.isFinite(h)||!Number.isFinite(m)||h<0||m<0||m>59||h>23)return null;
+  if(!Number.isFinite(h)||!Number.isFinite(m)||h<0||m<0||m>59)return null;
+  if(!allowLongHour&&h>23)return null;
+  if(allowLongHour&&h>23)return null;
   return {h,m};
 }
-function normalizeHM(value){
-  const x=parseHM(value);
+function normalizeHM(value,allowLongHour=false){
+  const x=parseHM(value,allowLongHour);
   return x?pad(x.h)+":"+pad(x.m):"00:00";
 }
 function updateSimplePicker(){
   const a=document.getElementById("manualStart"),b=document.getElementById("manualEnd"),c=document.getElementById("manualBreak");
   if(!a||!b||!c)return;
-  const s=parseHM(a.value),e=parseHM(b.value),br=parseHM(c.value);
+  const s=parseHM(a.value,false),e=parseHM(b.value,false),br=parseHM(c.value,true);
   if(s){picker.startH=s.h;picker.startM=s.m}
   if(e){picker.endH=e.h;picker.endM=e.m}
   if(br){picker.breakH=br.h;picker.breakM=br.m}
@@ -428,9 +438,9 @@ function updateDayPreview(){
   el.innerHTML=`<b>${pad(picker.startH)}:${pad(picker.startM)} → ${pad(picker.endH)}:${pad(picker.endM)}</b><span>Pause : ${hm(brk)} · Travail : ${hm(total)}</span>`;
 }
 function saveWholeDay(){
-  const a=parseHM(document.getElementById("manualStart").value);
-  const b=parseHM(document.getElementById("manualEnd").value);
-  const br=parseHM(document.getElementById("manualBreak").value);
+  const a=parseHM(document.getElementById("manualStart").value,false);
+  const b=parseHM(document.getElementById("manualEnd").value,false);
+  const br=parseHM(document.getElementById("manualBreak").value,true);
   if(!a||!b||!br){toast("Vérifie les horaires : 08:00, 17:00 et 00:30");return}
   const base=new Date(picker.date);
   const start=new Date(base);start.setHours(a.h,a.m,0,0);
