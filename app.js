@@ -276,10 +276,10 @@ function salary(){
     <div class="salaryRow"><span>Salaire de base <small>${hm(c.normalHours*60)} normales × 13,78 €</small></span><b>${eur(c.normalHours*13.78)}</b></div>
     <div class="salaryRow"><span>13e mois — heures normales <small>${c.normalHours.toFixed(2)} h × 1,84 €</small></span><b>${eur(c.thNormal)}</b></div>
     <div class="salaryRow"><span>Prime équipe <small>${c.team} j × 14,50 €</small></span><b>${eur(c.teamPremium)}</b></div>
-    <div class="salaryRow"><span>13e mois — prime équipe <small>${c.team} j × 0,47 €</small></span><b>${eur(c.thTeam)}</b></div>
+    <div class="salaryRow"><span>13e mois — prime équipe <small>${c.team} j × 1,93 €</small></span><b>${eur(c.thTeam)}</b></div>
     <div class="salaryRow"><span>Habillage <small>${ds.length} j × 3,50 €</small></span><b>${eur(c.dressing)}</b></div>
-    <div class="salaryRow"><span>Heures de nuit <small>${c.nightHours.toFixed(2)} h × 13,78 €</small></span><b>${eur(c.nightSalary)}</b></div>
-    <div class="salaryRow"><span>13e mois — heures de nuit <small>${c.nightHours.toFixed(2)} h × 1,93 €</small></span><b>${eur(c.thNight)}</b></div>
+    <div class="salaryRow"><span>13e mois —Habillage <small>${ds.length} j × 0,7 €</small></span><b>${eur(c.thdressing)}</b></div>
+    <div class="salaryRow"><span>Heures de nuit <small>${c.nightHours.toFixed(2)} h × 13,78 €</small></span><b>${eur(c.nightSalary)}</b></div>  
     <div class="salaryRow"><span>Majoration nuit <small>${c.nightHours.toFixed(2)} h × 6,89 €</small></span><b>${eur(c.nightPremium)}</b></div>
     <div class="salaryRow"><span>13e mois — majoration nuit <small>${c.nightHours.toFixed(2)} h × 0,91 €</small></span><b>${eur(c.thNightPremium)}</b></div>
     <div class="salaryRow highlightRow"><span>Brut total</span><b>${eur(c.gross)}</b></div>
