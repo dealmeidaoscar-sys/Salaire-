@@ -1,21 +1,5 @@
-# Heures Pro — V39
+# Heures Pro V48
 
-Version PWA mobile pour le suivi des heures et de la rémunération.
+Version avec jours d’équipe, habillage et panier automatiques sur chaque journée travaillée.
 
-## V39
-- Audit et nettoyage de l’historique annuel.
-- Vue annuelle complète de janvier à décembre.
-- Navigation année précédente / suivante, avec blocage des années futures.
-- Graphique mensuel des heures travaillées.
-- Totaux annuels : heures, brut, net estimé, nuit et jours travaillés.
-- Détail mensuel : heures, brut et net.
-- Historique quotidien conservé avec ouverture/modification et suppression.
-- Boutons d’action de l’historique alignés à l’extrémité droite.
-- Service worker et cache V39.
-- Données existantes conservées via la clé de stockage historique.
-
-## Installation
-1. Remplacer les fichiers du dépôt GitHub Pages par les 7 fichiers de cette archive.
-2. Recharger l’application. Si une ancienne version reste affichée, fermer l’onglet/PWA puis la rouvrir.
-
-V47: correction du chevauchement heures/net dans les cartes mensuelles annuelles, avec mise en page mobile une carte par ligne.
+Le taux horaire normal est modifiable. Les montants liés au taux évoluent proportionnellement : 1,84 €/h, 14,50 €/jour, 1,93 €/jour, 3,50 €/jour, 0,47 €/jour, taux nuit, 6,89 €/h et 0,91 €/h. Le panier reste fixe à 7,50 € net/jour.

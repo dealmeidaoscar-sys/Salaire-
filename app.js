@@ -1,4 +1,4 @@
-/* V47 — salary labels and 13e mois breakdown corrected */
+/* V48 — automatic team/basket days + linked salary rates */
 
 const KEY="heuresProV35";
 const OLD_KEYS=["heuresProV34","heuresProV33","heuresProV32","heuresProV31","heuresProV30","heuresProV29","heuresProV28","heuresProV27","heuresProV26","heuresProV25","heuresProV24"];
@@ -66,22 +66,23 @@ function weekStart(d){let x=new Date(d+"T12:00:00");x.setDate(x.getDate()-((x.ge
 function week(d){let a=[],x=new Date(weekStart(d)+"T12:00:00");for(let i=0;i<7;i++){a.push(iso(x));x.setDate(x.getDate()+1)}return a}
 function ot(d){let before=0;for(let x of week(d))if(x<d)before+=work(x);let cur=work(d),n=0,o25=0,o50=0;let a=S.settings.weekly*60,b=S.settings.ot25*60,totalBefore=before,total=before+cur;let p=Math.max(0,Math.min(total,b)-Math.max(totalBefore,a));o25=p;let q=Math.max(0,total-b)-Math.max(0,totalBefore-b);o50=Math.max(0,q);let used=o25+o50;n=Math.max(0,cur-used);return{n,o25,o50}}
 function daySalary(d){
-  const w=work(d), n=night(d), o=ot(d), r=13.78;
+  const w=work(d), n=night(d), o=ot(d), r=Math.max(0,Number(S.settings.rate)||13.78);
   const nightHours=n/60;
+  // Toutes les lignes liées au taux horaire évoluent proportionnellement à r.
+  // Le panier reste fixe à 7,50 € net par jour travaillé.
+  const scale=r/13.78;
   // Heures normales = heures travaillées hors nuit et hors heures supplémentaires.
-  // Les heures de nuit sont rémunérées sur leurs propres lignes.
   const normalHours=Math.max(0,(w/60)-nightHours-(o.o25+o.o50)/60);
-  const isTeam=(S.settings.teamDates||[]).includes(d), hasBasket=(S.settings.basketDates||[]).includes(d);
   const base=normalHours*r;
-  const normal13=normalHours*1.84;
-  const team=isTeam?14.50:0;
-  const team13=isTeam?1.93:0;
-  const habillage=3.50;
-  const habillage13=0.47;
+  const normal13=normalHours*1.84*scale;
+  const team=14.50*scale;
+  const team13=1.93*scale;
+  const habillage=3.50*scale;
+  const habillage13=0.47*scale;
   const nightSalary=nightHours*r;
-  const nightMajor=nightHours*6.89;
-  const nightMajor13=nightHours*0.91;
-  const basket=hasBasket?7.50:0;
+  const nightMajor=nightHours*6.89*scale;
+  const nightMajor13=nightHours*0.91*scale;
+  const basket=7.50;
   const gross=base+normal13+team+team13+habillage+habillage13+nightSalary+nightMajor+nightMajor13;
   const netBeforeTax=gross*S.settings.net;
   const incomeTax=Math.max(0,netBeforeTax*Number(S.settings.taxRate||0)/100);
@@ -266,6 +267,8 @@ function saveEditedDay(date){
 
 function salary(){
   let now=new Date(),mk=now.getFullYear()+"-"+pad(now.getMonth()+1),c=interimCalc(mk);
+  const r=Math.max(0,Number(S.settings.rate)||13.78),scale=r/13.78;
+  const rNormal13=1.84*scale,rTeam=14.50*scale,rTeam13=1.93*scale,rHab=3.50*scale,rHab13=0.47*scale,rNight=r,rNightMaj=6.89*scale,rNightMaj13=0.91*scale;
   let ds=[...new Set(S.punches.map(p=>p.date))].filter(d=>d.startsWith(mk));
   let tot={w:0,n:0,o25:0,o50:0,normal13:0,team:0,team13:0,habillage:0,habillage13:0,nightSalary:0,nightMajor:0,nightMajor13:0,basket:0};
   ds.forEach(d=>{const m=daySalary(d);tot.w+=m.w;tot.n+=m.n;tot.o25+=m.o.o25;tot.o50+=m.o.o50;tot.normal13+=m.normal13;tot.team+=m.team;tot.team13+=m.team13;tot.habillage+=m.habillage;tot.habillage13+=m.habillage13;tot.nightSalary+=m.nightSalary;tot.nightMajor+=m.nightMajor;tot.nightMajor13+=m.nightMajor13;tot.basket+=m.basket});
@@ -292,32 +295,32 @@ function salary(){
     ${cetTotal()?`<div class="infoLine sub"><span>CET cumulé</span><b>${eur(cetTotal())}</b></div>`:""}
   </div>${c.cetCurrent?`<button id="addCet" class="btn purple compactBtn">Mettre ce mois au CET</button>`:""}</section>
   <section class="card compactSection"><div class="head"><h2>Détail du calcul</h2></div><div class="compactList">
-    <div class="infoLine"><span>Salaire de base</span><b>${eur(tot.w/60*13.78)}</b></div>
-    <div class="infoLine"><span>13e mois — heures normales × 1,84 €</span><b>${eur(tot.normal13)}</b></div>
+    <div class="infoLine"><span>Salaire de base × ${r.toFixed(2).replace(".",",")} € / h</span><b>${eur(tot.w/60*r)}</b></div>
+    <div class="infoLine"><span>13e mois — heures normales × ${rNormal13.toFixed(2).replace(".",",")} €</span><b>${eur(tot.normal13)}</b></div>
     <div class="infoLine"><span>Prime équipe</span><b>${eur(tot.team)}</b></div>
-    <div class="infoLine"><span>13e mois — prime équipe × 1,93 €</span><b>${eur(tot.team13)}</b></div>
+    <div class="infoLine"><span>13e mois — prime équipe × ${rTeam13.toFixed(2).replace(".",",")} €</span><b>${eur(tot.team13)}</b></div>
     <div class="infoLine"><span>Habillage</span><b>${eur(tot.habillage)}</b></div>
-    <div class="infoLine"><span>13e mois — habillage × 0,47 €</span><b>${eur(tot.habillage13)}</b></div>
-    <div class="infoLine"><span>Heures de nuit × 13,78 €</span><b>${eur(tot.nightSalary)}</b></div>
-    <div class="infoLine"><span>Majoration nuit × 6,89 €</span><b>${eur(tot.nightMajor)}</b></div>
-    <div class="infoLine"><span>13e mois — majoration nuit × 0,91 €</span><b>${eur(tot.nightMajor13)}</b></div>
+    <div class="infoLine"><span>13e mois — habillage × ${rHab13.toFixed(2).replace(".",",")} €</span><b>${eur(tot.habillage13)}</b></div>
+    <div class="infoLine"><span>Heures de nuit × ${rNight.toFixed(2).replace(".",",")} €</span><b>${eur(tot.nightSalary)}</b></div>
+    <div class="infoLine"><span>Majoration nuit × ${rNightMaj.toFixed(2).replace(".",",")} €</span><b>${eur(tot.nightMajor)}</b></div>
+    <div class="infoLine"><span>13e mois — majoration nuit × ${rNightMaj13.toFixed(2).replace(".",",")} €</span><b>${eur(tot.nightMajor13)}</b></div>
     <div class="infoLine highlightRow"><span>Brut total</span><b>${eur(gross)}</b></div>
     <div class="infoLine"><span>Panier net × 7,50 €</span><b>${eur(tot.basket)}</b></div>
   </div></section>`;
 }
 
 function settings(){return `<header><div><div class="eyebrow">CONFIGURATION</div><h1 class="title">Réglages</h1></div><div class="logo">⚙</div></header>
-<section class="card"><div class="head"><div><h2>Salaire</h2><p class="sectionNote">Barème réel configuré pour ton calcul.</p></div></div><div class="grid2">
-<div class="field"><label>Base</label><input value="13,78 € / h" disabled></div><div class="field"><label>13e mois — heures normales</label><input value="1,84 € / h" disabled></div>
-<div class="field"><label>Prime équipe</label><input value="14,50 € / jour" disabled></div><div class="field"><label>13e mois — prime équipe</label><input value="1,93 € / jour" disabled></div>
-<div class="field"><label>Habillage</label><input value="3,50 € / jour" disabled></div><div class="field"><label>13e mois — habillage</label><input value="0,47 € / jour" disabled></div>
-<div class="field"><label>Heures de nuit</label><input value="13,78 € / h" disabled></div><div class="field"><label>Majoration nuit</label><input value="6,89 € / h" disabled></div>
-<div class="field"><label>13e mois — majoration nuit</label><input value="0,91 € / h" disabled></div><div class="field"><label>Panier net</label><input value="7,50 € / jour" disabled></div></div>
+<section class="card"><div class="head"><div><h2>Salaire</h2><p class="sectionNote">Modifie le taux horaire : tous les montants liés au taux se recalculent automatiquement.</p></div></div><div class="field"><label>Taux horaire normal</label><input id="rate" type="number" inputmode="decimal" step="0.01" min="0" value="${S.settings.rate}"></div><div class="subCard"><div class="head"><div><h3>Barème automatique</h3><p class="sectionNote">Les montants ci-dessous suivent le taux horaire. Le panier reste fixe.</p></div></div><div class="grid2">
+<div class="field"><label>13e mois — heures normales</label><input value="${(1.84*(S.settings.rate/13.78)).toFixed(2).replace('.',',')} € / h" disabled></div>
+<div class="field"><label>Prime équipe</label><input value="${(14.50*(S.settings.rate/13.78)).toFixed(2).replace('.',',')} € / jour" disabled></div>
+<div class="field"><label>13e mois — prime équipe</label><input value="${(1.93*(S.settings.rate/13.78)).toFixed(2).replace('.',',')} € / jour" disabled></div>
+<div class="field"><label>Habillage</label><input value="${(3.50*(S.settings.rate/13.78)).toFixed(2).replace('.',',')} € / jour" disabled></div>
+<div class="field"><label>13e mois — habillage</label><input value="${(0.47*(S.settings.rate/13.78)).toFixed(2).replace('.',',')} € / jour" disabled></div>
+<div class="field"><label>Heures de nuit</label><input value="${Number(S.settings.rate).toFixed(2).replace('.',',')} € / h" disabled></div>
+<div class="field"><label>Majoration nuit</label><input value="${(6.89*(S.settings.rate/13.78)).toFixed(2).replace('.',',')} € / h" disabled></div>
+<div class="field"><label>13e mois — majoration nuit</label><input value="${(0.91*(S.settings.rate/13.78)).toFixed(2).replace('.',',')} € / h" disabled></div>
+<div class="field"><label>Panier net</label><input value="7,50 € / jour" disabled></div></div></div>
 <div class="field"><label>Coefficient net estimé</label><input id="net" type="number" step=".01" value="${S.settings.net}"></div><div class="field"><label>Prélèvement à la source estimé (%)</label><input id="taxRate" type="number" step=".1" min="0" value="${S.settings.taxRate||0}"></div><button id="saveSalary" class="btn purple" style="width:100%">Enregistrer</button></section>
-<section class="card"><div class="head"><div><h2>Jours équipe & panier</h2><p class="sectionNote">Pour le mois en cours, indique les dates concernées.</p></div></div>
-<div class="field"><label>Jours d'équipe</label><input id="teamDates" type="text" value="${(S.settings.teamDates||[]).filter(d=>d.startsWith(new Date().getFullYear()+"-"+pad(new Date().getMonth()+1))).join(", ")}" placeholder="2026-09-01, 2026-09-02"></div>
-<div class="field"><label>Jours donnant droit au panier</label><input id="basketDates" type="text" value="${(S.settings.basketDates||[]).filter(d=>d.startsWith(new Date().getFullYear()+"-"+pad(new Date().getMonth()+1))).join(", ")}" placeholder="2026-09-01, 2026-09-02"></div>
-<button id="saveDays" class="btn purple" style="width:100%">Enregistrer les jours</button></section>
 <section class="card"><div class="head"><h2>Heures supplémentaires</h2></div><div class="field"><label>Début des heures sup. (h/semaine)</label><input id="weekly" type="number" step=".1" value="${S.settings.weekly}"></div><div class="field"><label>Fin tranche +25% (h/semaine)</label><input id="ot25" type="number" step=".1" value="${S.settings.ot25}"></div><div class="grid2"><div class="field"><label>Majoration 1 (%)</label><input id="ot25pct" type="number" value="${S.settings.ot25pct}"></div><div class="field"><label>Majoration 2 (%)</label><input id="ot50pct" type="number" value="${S.settings.ot50pct}"></div></div><button id="saveOT" class="btn purple" style="width:100%">Enregistrer</button></section>
 <section class="card nightCard"><div class="head"><h2>Nuit</h2></div><div class="nightGrid"><div class="field nightField"><label>Début</label><input id="nightStart" type="time" value="${S.settings.nightStart}"></div><div class="field nightField"><label>Fin</label><input id="nightEnd" type="time" value="${S.settings.nightEnd}"></div></div><div class="field"><label>Majoration (%)</label><input id="nightPct" type="number" value="${S.settings.nightPct}"></div><button id="saveNight" class="btn purple" style="width:100%">Enregistrer</button></section>
 <section class="card"><div class="head"><div><h2>Intérim — IFM & congés payés</h2><p class="sectionNote">Paramètres modifiables à ta guise. Ils sont repris automatiquement dans le calcul du salaire.</p></div></div>
@@ -343,8 +346,8 @@ document.querySelectorAll("[data-editday]").forEach(b=>b.onclick=e=>{if(e.target
 document.querySelectorAll("[data-delday]").forEach(b=>b.onclick=e=>{e.stopPropagation();if(confirm("Supprimer toute cette journée ?")){S.punches=S.punches.filter(p=>p.date!==b.dataset.delday);save();render();toast("Journée supprimée ✓")}});
 document.querySelectorAll("[data-delp]").forEach(b=>b.onclick=()=>{S.punches=S.punches.filter(p=>p.id!==b.dataset.delp);save();render()});
 document.querySelectorAll("[data-prime]").forEach(b=>b.onclick=()=>{S.settings.primes.splice(+b.dataset.prime,1);save();render()});
-if(q("saveSalary"))q("saveSalary").onclick=()=>{S.settings.net=+q("net").value||0;S.settings.taxRate=Math.max(0,+q("taxRate").value||0);save();render();toast("Salaire enregistré ✓")};
-if(q("saveDays"))q("saveDays").onclick=()=>{const key=new Date().getFullYear()+"-"+pad(new Date().getMonth()+1);const parse=v=>v.split(/[,;\s]+/).map(x=>x.trim()).filter(x=>/^\d{4}-\d{2}-\d{2}$/.test(x));S.settings.teamDates=(S.settings.teamDates||[]).filter(d=>!d.startsWith(key)).concat(parse(q("teamDates").value));S.settings.basketDates=(S.settings.basketDates||[]).filter(d=>!d.startsWith(key)).concat(parse(q("basketDates").value));save();render();toast("Jours enregistrés ✓")};
+if(q("saveSalary"))q("saveSalary").onclick=()=>{S.settings.rate=Math.max(0,+q("rate").value||13.78);S.settings.net=+q("net").value||0;S.settings.taxRate=Math.max(0,+q("taxRate").value||0);save();render();toast("Salaire enregistré ✓")};
+
 if(q("saveOT"))q("saveOT").onclick=()=>{S.settings.weekly=+q("weekly").value||35;S.settings.ot25=+q("ot25").value||43;S.settings.ot25pct=+q("ot25pct").value||25;S.settings.ot50pct=+q("ot50pct").value||50;save();render();toast("Heures sup. enregistrées ✓")};
 if(q("saveNight"))q("saveNight").onclick=()=>{S.settings.nightStart=q("nightStart").value;S.settings.nightEnd=q("nightEnd").value;S.settings.nightPct=+q("nightPct").value||0;save();render();toast("Nuit enregistrée ✓")};
 if(q("saveInterim"))q("saveInterim").onclick=()=>{S.settings.interimEnabled=q("interimEnabled").checked;S.settings.ifmEnabled=q("ifmEnabled").checked;S.settings.ifmRate=Math.max(0,+q("ifmRate").value||0);S.settings.ifmMode=q("ifmMode").value;S.settings.iccpEnabled=q("iccpEnabled").checked;S.settings.iccpRate=Math.max(0,+q("iccpRate").value||0);S.settings.iccpMode=q("iccpMode").value;save();render();toast("Paramètres intérim enregistrés ✓")};
