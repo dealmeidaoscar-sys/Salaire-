@@ -1,8 +1,8 @@
-/* V50 — hours counted once, overtime paid, primes counted, night-shift punching, consistent day/week/year totals */
+/* V52 — overtime hours paid in full (+13th month), manual primes kept but not counted unless switched on */
 
 const KEY="heuresProV35";
 const OLD_KEYS=["heuresProV34","heuresProV33","heuresProV32","heuresProV31","heuresProV30","heuresProV29","heuresProV28","heuresProV27","heuresProV26","heuresProV25","heuresProV24"];
-const DEF={punches:[],settings:{rate:13.78,net:.78,taxRate:0,thirteen:0,weekly:35,nightStart:"20:00",nightEnd:"06:00",nightPct:50,ot25:43,ot25pct:25,ot50pct:50,primes:[],teamDates:[],basketDates:[],interimEnabled:true,ifmEnabled:true,ifmRate:10,ifmMode:"pay",iccpEnabled:true,iccpRate:10,iccpMode:"pay",cetEntries:[]}};
+const DEF={punches:[],settings:{rate:13.78,net:.78,taxRate:0,thirteen:0,weekly:35,nightStart:"20:00",nightEnd:"06:00",nightPct:50,ot25:43,ot25pct:25,ot50pct:50,teamDates:[],basketDates:[],interimEnabled:true,ifmEnabled:true,ifmRate:10,ifmMode:"pay",iccpEnabled:true,iccpRate:10,iccpMode:"pay",cetEntries:[]}};
 let S=load(),page="home",annualYear=new Date().getFullYear(),annualChartOpen=true,historyMonthKey=iso(new Date()).slice(0,7),historyOpenWeeks=new Set(),historyOpenDays=new Set(),picker={date:new Date(),month:new Date(),startH:8,startM:0,endH:17,endM:0,breakH:1,breakM:0},copyState={source:null,targets:new Set(),month:new Date()};
 
 function load(){
@@ -16,7 +16,7 @@ function load(){
     return structuredClone(DEF);
   }catch(e){return structuredClone(DEF)}
 }
-function merge(x){return {punches:Array.isArray(x.punches)?x.punches:[],settings:{...DEF.settings,...(x.settings||{}),primes:Array.isArray(x.settings?.primes)?x.settings.primes:[],cetEntries:Array.isArray(x.settings?.cetEntries)?x.settings.cetEntries:[],teamDates:Array.isArray(x.settings?.teamDates)?x.settings.teamDates:[],basketDates:Array.isArray(x.settings?.basketDates)?x.settings.basketDates:[]}}}
+function merge(x){return {punches:Array.isArray(x.punches)?x.punches:[],settings:{...DEF.settings,...(x.settings||{}),cetEntries:Array.isArray(x.settings?.cetEntries)?x.settings.cetEntries:[],teamDates:Array.isArray(x.settings?.teamDates)?x.settings.teamDates:[],basketDates:Array.isArray(x.settings?.basketDates)?x.settings.basketDates:[]}}}
 function save(){localStorage.setItem(KEY,JSON.stringify(S))}
 function pad(n){return String(n).padStart(2,"0")}
 function iso(d){return d.getFullYear()+"-"+pad(d.getMonth()+1)+"-"+pad(d.getDate())}
@@ -97,8 +97,11 @@ function daySalary(d){
   const scale=r/13.78;
   // Primes équipe / habillage / panier : uniquement les jours réellement travaillés.
   const day=w>0?1:0;
-  // Chaque heure travaillée est comptée UNE SEULE FOIS au taux normal (nuit et heures sup. incluses).
-  const base=(w/60)*r;
+  // Chaque heure travaillée est comptée UNE SEULE FOIS :
+  // - heures normales et de nuit : au taux normal (la nuit reçoit en plus sa majoration)
+  // - heures sup. : payées en entier sur leurs propres lignes (taux normal + majoration)
+  const p25=(Number(S.settings.ot25pct)||0)/100, p50=(Number(S.settings.ot50pct)||0)/100;
+  const base=Math.max(0,(w-otMin)/60)*r;
   // Heures normales = hors nuit et hors heures sup. (sert au 13e mois). Une heure à la fois de nuit
   // et supplémentaire n'est retirée qu'une seule fois.
   const normalHours=Math.max(0,(w-n-otMin+nightInTail(d,otMin))/60);
@@ -110,30 +113,33 @@ function daySalary(d){
   // Majorations : nuit (uniquement sur les heures de nuit) et heures sup. (+% du taux horaire).
   const nightMajor=nightHours*6.89*scale;
   const nightMajor13=nightHours*0.91*scale;
-  const otMajor=(o.o25/60)*r*(Number(S.settings.ot25pct)||0)/100+(o.o50/60)*r*(Number(S.settings.ot50pct)||0)/100;
+  const ot25Pay=(o.o25/60)*r*(1+p25);
+  const ot50Pay=(o.o50/60)*r*(1+p50);
+  // 13e mois sur les heures sup. : même proportion que sur les heures normales (1,84 € pour 13,78 €).
+  const ot13=1.84*scale*((o.o25/60)*(1+p25)+(o.o50/60)*(1+p50));
   const basket=7.50*day;
-  const baseGross=base+normal13+team+team13+habillage+habillage13+otMajor+nightMajor+nightMajor13;
+  const baseGross=base+normal13+team+team13+habillage+habillage13+ot25Pay+ot50Pay+ot13+nightMajor+nightMajor13;
   // Estimation jour/semaine : inclut l'IFM et les congés payés versés, comme le calcul mensuel.
   const gross=baseGross*interimFactor();
   const netBeforeTax=gross*S.settings.net;
   const incomeTax=Math.max(0,netBeforeTax*Number(S.settings.taxRate||0)/100);
   const netAfterTax=netBeforeTax-incomeTax;
   const estimatedNet=netAfterTax+basket;
-  return {w,n,o,normal:base,normal13,team,team13,habillage,habillage13,otMajor,nightMajor,nightMajor13,basket,primes:0,taxablePrimes:0,nonTaxablePrimes:0,baseGross,gross,netBeforeTax,incomeTax,netAfterTax,estimatedNet,ifm:0,iccp:0,paidInterim:0,cetInterim:0};
+  return {w,n,o,normal:base,normal13,team,team13,habillage,habillage13,ot25Pay,ot50Pay,ot13,nightMajor,nightMajor13,basket,baseGross,gross,netBeforeTax,incomeTax,netAfterTax,estimatedNet,ifm:0,iccp:0,paidInterim:0,cetInterim:0};
 }
 function monthSalaryBase(key){
-  let out={w:0,gross:0,normal13:0,team:0,team13:0,habillage:0,habillage13:0,otMajor:0,nightMajor:0,nightMajor13:0,basket:0,th:0,pr:0,taxable:0,nontax:0};
+  let out={w:0,gross:0,normal13:0,team:0,team13:0,habillage:0,habillage13:0,ot25Pay:0,ot50Pay:0,ot13:0,nightMajor:0,nightMajor13:0,basket:0,th:0,taxable:0,nontax:0};
   let ds=[...new Set(S.punches.map(p=>p.date))].filter(d=>d.startsWith(key));
-  ds.forEach(d=>{const m=daySalary(d);out.w+=m.w;out.gross+=m.baseGross;out.normal13+=m.normal13;out.team+=m.team;out.team13+=m.team13;out.habillage+=m.habillage;out.habillage13+=m.habillage13;out.otMajor+=m.otMajor;out.nightMajor+=m.nightMajor;out.nightMajor13+=m.nightMajor13;out.basket+=m.basket});
-  // Primes & indemnités saisies dans les réglages : comptées chaque mois où tu as travaillé.
+  ds.forEach(d=>{const m=daySalary(d);out.w+=m.w;out.gross+=m.baseGross;out.normal13+=m.normal13;out.team+=m.team;out.team13+=m.team13;out.habillage+=m.habillage;out.habillage13+=m.habillage13;out.ot25Pay+=m.ot25Pay;out.ot50Pay+=m.ot50Pay;out.ot13+=m.ot13;out.nightMajor+=m.nightMajor;out.nightMajor13+=m.nightMajor13;out.basket+=m.basket});
+  // Primes & indemnités des réglages : comptées uniquement si l'interrupteur « Compter dans le salaire » est activé
+  // (équipe, habillage et panier sont déjà comptés automatiquement, donc pas de double comptage par défaut).
   if(out.w>0){
-    const primes=(S.settings.primes||[]).filter(p=>p.enabled!==false);
+    const primes=(S.settings.primes||[]).filter(p=>p.counted===true&&p.enabled!==false);
     out.taxable=primes.filter(p=>p.taxable).reduce((a,p)=>a+(Number(p.amount)||0),0);
     out.nontax=primes.filter(p=>!p.taxable).reduce((a,p)=>a+(Number(p.amount)||0),0);
-    out.pr=out.taxable+out.nontax;
     out.gross+=out.taxable;
   }
-  out.th=out.normal13+out.team13+out.habillage13+out.nightMajor13;
+  out.th=out.normal13+out.team13+out.habillage13+out.ot13+out.nightMajor13;
   return out;
 }
 function interimCalc(key){
@@ -309,8 +315,8 @@ function salary(){
   const r=Math.max(0,Number(S.settings.rate)||13.78),scale=r/13.78;
   const rNormal13=1.84*scale,rTeam=14.50*scale,rTeam13=1.93*scale,rHab=3.50*scale,rHab13=0.47*scale,rNightMaj=6.89*scale,rNightMaj13=0.91*scale;
   let ds=[...new Set(S.punches.map(p=>p.date))].filter(d=>d.startsWith(mk));
-  let tot={w:0,n:0,o25:0,o50:0,base:0,otMajor:0,normal13:0,team:0,team13:0,habillage:0,habillage13:0,nightMajor:0,nightMajor13:0,basket:0};
-  ds.forEach(d=>{const m=daySalary(d);tot.w+=m.w;tot.n+=m.n;tot.o25+=m.o.o25;tot.o50+=m.o.o50;tot.base+=m.normal;tot.otMajor+=m.otMajor;tot.normal13+=m.normal13;tot.team+=m.team;tot.team13+=m.team13;tot.habillage+=m.habillage;tot.habillage13+=m.habillage13;tot.nightMajor+=m.nightMajor;tot.nightMajor13+=m.nightMajor13;tot.basket+=m.basket});
+  let tot={w:0,n:0,o25:0,o50:0,base:0,ot25Pay:0,ot50Pay:0,ot13:0,normal13:0,team:0,team13:0,habillage:0,habillage13:0,nightMajor:0,nightMajor13:0,basket:0};
+  ds.forEach(d=>{const m=daySalary(d);tot.w+=m.w;tot.n+=m.n;tot.o25+=m.o.o25;tot.o50+=m.o.o50;tot.base+=m.normal;tot.ot25Pay+=m.ot25Pay;tot.ot50Pay+=m.ot50Pay;tot.ot13+=m.ot13;tot.normal13+=m.normal13;tot.team+=m.team;tot.team13+=m.team13;tot.habillage+=m.habillage;tot.habillage13+=m.habillage13;tot.nightMajor+=m.nightMajor;tot.nightMajor13+=m.nightMajor13;tot.basket+=m.basket});
   let gross=c.gross,netBeforeTax=c.netBeforeTax,tax=c.tax,netAfterTax=netBeforeTax-tax,received=netAfterTax+tot.basket+c.nontax;
   let wg=0,wnet=0,ww=0,wn=0; week(iso(now)).forEach(d=>{let m=daySalary(d);wg+=m.gross;wnet+=m.estimatedNet;ww+=m.w;wn+=m.n});
   return `<header><div><div class="eyebrow">RÉMUNÉRATION</div><h1 class="title">Salaire</h1></div><div class="logo">€</div></header>
@@ -334,7 +340,7 @@ function salary(){
     ${cetTotal()?`<div class="infoLine sub"><span>CET cumulé</span><b>${eur(cetTotal())}</b></div>`:""}
   </div>${c.cetCurrent?`<button id="addCet" class="btn purple compactBtn">Mettre ce mois au CET</button>`:""}</section>
   <section class="card compactSection"><div class="head"><h2>Détail du calcul</h2></div><div class="compactList">
-    <div class="infoLine"><span>Heures travaillées (nuit incluse) × ${r.toFixed(2).replace(".",",")} € / h</span><b>${eur(tot.base)}</b></div>
+    <div class="infoLine"><span>Heures normales (nuit incluse) × ${r.toFixed(2).replace(".",",")} € / h</span><b>${eur(tot.base)}</b></div>
     <div class="infoLine"><span>13e mois — heures normales × ${rNormal13.toFixed(2).replace(".",",")} €</span><b>${eur(tot.normal13)}</b></div>
     <div class="infoLine"><span>Prime équipe</span><b>${eur(tot.team)}</b></div>
     <div class="infoLine"><span>13e mois — prime équipe × ${rTeam13.toFixed(2).replace(".",",")} €</span><b>${eur(tot.team13)}</b></div>
@@ -342,7 +348,9 @@ function salary(){
     <div class="infoLine"><span>13e mois — habillage × ${rHab13.toFixed(2).replace(".",",")} €</span><b>${eur(tot.habillage13)}</b></div>
     <div class="infoLine"><span>Majoration nuit (heures de nuit uniquement) × ${rNightMaj.toFixed(2).replace(".",",")} €</span><b>${eur(tot.nightMajor)}</b></div>
     <div class="infoLine"><span>13e mois — majoration nuit × ${rNightMaj13.toFixed(2).replace(".",",")} €</span><b>${eur(tot.nightMajor13)}</b></div>
-    ${tot.otMajor?`<div class="infoLine"><span>Majoration heures sup. <small>${hm(tot.o25)} à +${S.settings.ot25pct}% · ${hm(tot.o50)} à +${S.settings.ot50pct}%</small></span><b>${eur(tot.otMajor)}</b></div>`:""}
+    ${tot.o25?`<div class="infoLine"><span>Heures sup. +${S.settings.ot25pct}% <small>${hm(tot.o25)} × ${(Math.round(r*(1+(Number(S.settings.ot25pct)||0)/100)*100+1e-6)/100).toFixed(2).replace(".",",")} €</small></span><b>${eur(tot.ot25Pay)}</b></div>`:""}
+    ${tot.o50?`<div class="infoLine"><span>Heures sup. +${S.settings.ot50pct}% <small>${hm(tot.o50)} × ${(Math.round(r*(1+(Number(S.settings.ot50pct)||0)/100)*100+1e-6)/100).toFixed(2).replace(".",",")} €</small></span><b>${eur(tot.ot50Pay)}</b></div>`:""}
+    ${tot.ot13?`<div class="infoLine"><span>13e mois — heures sup.</span><b>${eur(tot.ot13)}</b></div>`:""}
     ${c.taxable?`<div class="infoLine"><span>Primes soumises à l'impôt</span><b>${eur(c.taxable)}</b></div>`:""}
     <div class="infoLine highlightRow"><span>Brut total</span><b>${eur(gross)}</b></div>
     <div class="infoLine"><span>Panier net × 7,50 €</span><b>${eur(tot.basket)}</b></div>
@@ -368,7 +376,7 @@ function settings(){return `<header><div><div class="eyebrow">CONFIGURATION</div
 <div class="subCard"><div class="switchRow"><div><b>Prime de fin de mission (IFM)</b><small>Taux appliqué au brut de la période.</small></div><label class="switch"><input id="ifmEnabled" type="checkbox" ${S.settings.ifmEnabled!==false?"checked":""}><span></span></label></div><div class="field"><label>Taux IFM (%)</label><input id="ifmRate" type="number" min="0" step=".1" value="${S.settings.ifmRate}"></div><div class="field"><label>Mode</label><select id="ifmMode"><option value="pay" ${S.settings.ifmMode!=="cet"?"selected":""}>Versée avec le salaire</option><option value="cet" ${S.settings.ifmMode==="cet"?"selected":""}>Mise au CET</option></select></div></div>
 <div class="subCard"><div class="switchRow"><div><b>Indemnité de congés payés (ICCP)</b><small>Calculée selon le taux que tu définis.</small></div><label class="switch"><input id="iccpEnabled" type="checkbox" ${S.settings.iccpEnabled!==false?"checked":""}><span></span></label></div><div class="field"><label>Taux congés payés (%)</label><input id="iccpRate" type="number" min="0" step=".1" value="${S.settings.iccpRate}"></div><div class="field"><label>Mode</label><select id="iccpMode"><option value="pay" ${S.settings.iccpMode!=="cet"?"selected":""}>Versés avec le salaire</option><option value="cet" ${S.settings.iccpMode==="cet"?"selected":""}>Mis au CET</option></select></div></div>
 <div class="row"><span>IFM estimée ce mois</span><b>${eur(interimCalc(new Date().getFullYear()+"-"+pad(new Date().getMonth()+1)).ifm)}</b></div><div class="row"><span>Congés payés estimés ce mois</span><b>${eur(interimCalc(new Date().getFullYear()+"-"+pad(new Date().getMonth()+1)).iccp)}</b></div><div class="row"><span>CET cumulé</span><b>${eur(cetTotal())}</b></div><button id="saveInterim" class="btn purple" style="width:100%;margin-top:12px">Enregistrer les paramètres intérim</button></section>
-<section class="card"><div class="head"><h2>Primes & indemnités</h2></div><div class="primeForm"><div class="field"><label>Nom</label><input id="primeName" type="text"></div><div class="field"><label>Montant (€)</label><input id="primeAmount" type="number" inputmode="decimal" min="0" step="0.01"></div><div class="field"><label>Fiscalité</label><div class="taxChoice"><label><input type="radio" name="primeTax" value="taxable" checked><span>Soumis à l'impôt</span></label><label><input type="radio" name="primeTax" value="nontaxable"><span>Non soumis à l'impôt</span></label></div></div><button id="addPrime" type="button" class="btn purple" style="width:100%">＋ Ajouter la prime / indemnité</button></div>${S.settings.primes.length?S.settings.primes.map((p,i)=>`<div class="primeItem"><span class="primeDot"></span><div class="primeInfo"><div class="primeName">${esc(p.name)}</div><div class="primeMeta">${eur(p.amount)} · ${p.taxable?"Soumis à l'impôt":"Non soumis à l'impôt"}</div></div><button type="button" class="btn small red" data-prime="${i}">Supprimer</button></div>`).join(""):`<div class="empty">Aucune prime ou indemnité.</div>`}</section>
+<section class="card"><div class="head"><div><h2>Primes & indemnités</h2><p class="sectionNote">Prime d'équipe, habillage et panier sont déjà comptés automatiquement : ne les ajoute pas ici. Une prime saisie ici n'entre dans le salaire que si tu actives « Compter dans le salaire ».</p></div></div><div class="primeForm"><div class="field"><label>Nom</label><input id="primeName" type="text"></div><div class="field"><label>Montant (€)</label><input id="primeAmount" type="number" inputmode="decimal" min="0" step="0.01"></div><div class="field"><label>Fiscalité</label><div class="taxChoice"><label><input type="radio" name="primeTax" value="taxable" checked><span>Soumis à l'impôt</span></label><label><input type="radio" name="primeTax" value="nontaxable"><span>Non soumis à l'impôt</span></label></div></div><button id="addPrime" type="button" class="btn purple" style="width:100%">＋ Ajouter la prime / indemnité</button></div>${S.settings.primes.length?S.settings.primes.map((p,i)=>`<div class="primeItem"><span class="primeDot"></span><div class="primeInfo"><div class="primeName">${esc(p.name)}</div><div class="primeMeta">${eur(p.amount)} · ${p.taxable?"Soumis à l'impôt":"Non soumis à l'impôt"}</div><div class="primeMeta">${p.counted===true?"Comptée dans le salaire":"Non comptée dans le salaire"}</div></div><label class="switch"><input type="checkbox" data-primecount="${i}" ${p.counted===true?"checked":""}><span></span></label><button type="button" class="btn small red" data-prime="${i}">Supprimer</button></div>`).join(""):`<div class="empty">Aucune prime ou indemnité.</div>`}</section>
 <section class="card"><button id="reset" class="btn red" style="width:100%">Réinitialiser toutes les données</button></section>`}
 function esc(s){return String(s).replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#039;"}[c]))}
 function wire(){
@@ -386,6 +394,7 @@ document.querySelectorAll("[data-editday]").forEach(b=>b.onclick=e=>{if(e.target
 document.querySelectorAll("[data-delday]").forEach(b=>b.onclick=e=>{e.stopPropagation();if(confirm("Supprimer toute cette journée ?")){S.punches=S.punches.filter(p=>p.date!==b.dataset.delday);save();render();toast("Journée supprimée ✓")}});
 document.querySelectorAll("[data-delp]").forEach(b=>b.onclick=()=>{S.punches=S.punches.filter(p=>p.id!==b.dataset.delp);save();render()});
 document.querySelectorAll("[data-prime]").forEach(b=>b.onclick=()=>{S.settings.primes.splice(+b.dataset.prime,1);save();render()});
+document.querySelectorAll("[data-primecount]").forEach(b=>b.onchange=()=>{const p=S.settings.primes[+b.dataset.primecount];if(p){p.counted=b.checked;save();render();toast(b.checked?"Prime comptée ✓":"Prime non comptée ✓")}});
 if(q("saveSalary"))q("saveSalary").onclick=()=>{S.settings.rate=Math.max(0,+q("rate").value||13.78);S.settings.net=+q("net").value||0;S.settings.taxRate=Math.max(0,+q("taxRate").value||0);save();render();toast("Salaire enregistré ✓")};
 
 if(q("saveOT"))q("saveOT").onclick=()=>{S.settings.weekly=+q("weekly").value||35;S.settings.ot25=+q("ot25").value||43;S.settings.ot25pct=+q("ot25pct").value||25;S.settings.ot50pct=+q("ot50pct").value||50;save();render();toast("Heures sup. enregistrées ✓")};
@@ -400,7 +409,7 @@ if(q("addPrime"))q("addPrime").onclick=()=>{
   if(!name){toast("Indique le nom de la prime");q("primeName").focus();return}
   if(!Number.isFinite(amount)||amount<0){toast("Indique un montant valide");q("primeAmount").focus();return}
   const taxable=!tax||tax.value==="taxable";
-  S.settings.primes.push({id:crypto.randomUUID(),name,amount,taxable,enabled:true});
+  S.settings.primes.push({id:crypto.randomUUID(),name,amount,taxable,enabled:true,counted:false});
   save();render();toast("Prime ajoutée ✓");
 };
 if(q("reset"))q("reset").onclick=()=>{if(confirm("Tout effacer ?")){localStorage.removeItem(KEY);location.reload()}}
