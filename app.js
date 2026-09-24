@@ -1,4 +1,4 @@
-/* V52 — overtime hours paid in full (+13th month), manual primes kept but not counted unless switched on */
+/* V53 — team/dressing/basket primes switchable in settings (real effect on salary); new manual primes counted immediately */
 
 const KEY="heuresProV35";
 const OLD_KEYS=["heuresProV34","heuresProV33","heuresProV32","heuresProV31","heuresProV30","heuresProV29","heuresProV28","heuresProV27","heuresProV26","heuresProV25","heuresProV24"];
@@ -65,6 +65,7 @@ function night(d){
 function weekStart(d){let x=new Date(d+"T12:00:00");x.setDate(x.getDate()-((x.getDay()+6)%7));return iso(x)}
 function week(d){let a=[],x=new Date(weekStart(d)+"T12:00:00");for(let i=0;i<7;i++){a.push(iso(x));x.setDate(x.getDate()+1)}return a}
 function ot(d){let before=0;for(let x of week(d))if(x<d)before+=work(x);let cur=work(d),n=0,o25=0,o50=0;let a=S.settings.weekly*60,b=S.settings.ot25*60,totalBefore=before,total=before+cur;let p=Math.max(0,Math.min(total,b)-Math.max(totalBefore,a));o25=p;let q=Math.max(0,total-b)-Math.max(0,totalBefore-b);o50=Math.max(0,q);let used=o25+o50;n=Math.max(0,cur-used);return{n,o25,o50}}
+function autoOn(k){return !(S.settings.autoPrimes&&S.settings.autoPrimes[k]===false)}
 function nightInTail(d,tailMin){
   // Minutes de nuit comprises dans les dernières `tailMin` minutes travaillées du jour (= heures sup. du jour).
   if(tailMin<=0)return 0;
@@ -106,10 +107,12 @@ function daySalary(d){
   // et supplémentaire n'est retirée qu'une seule fois.
   const normalHours=Math.max(0,(w-n-otMin+nightInTail(d,otMin))/60);
   const normal13=normalHours*1.84*scale;
-  const team=14.50*scale*day;
-  const team13=1.93*scale*day;
-  const habillage=3.50*scale*day;
-  const habillage13=0.47*scale*day;
+  // Chaque prime automatique se coupe/active dans Réglages > Primes & indemnités.
+  const tOn=autoOn("team")?1:0, hOn=autoOn("habillage")?1:0, bOn=autoOn("basket")?1:0;
+  const team=14.50*scale*day*tOn;
+  const team13=1.93*scale*day*tOn;
+  const habillage=3.50*scale*day*hOn;
+  const habillage13=0.47*scale*day*hOn;
   // Majorations : nuit (uniquement sur les heures de nuit) et heures sup. (+% du taux horaire).
   const nightMajor=nightHours*6.89*scale;
   const nightMajor13=nightHours*0.91*scale;
@@ -117,7 +120,7 @@ function daySalary(d){
   const ot50Pay=(o.o50/60)*r*(1+p50);
   // 13e mois sur les heures sup. : même proportion que sur les heures normales (1,84 € pour 13,78 €).
   const ot13=1.84*scale*((o.o25/60)*(1+p25)+(o.o50/60)*(1+p50));
-  const basket=7.50*day;
+  const basket=7.50*day*bOn;
   const baseGross=base+normal13+team+team13+habillage+habillage13+ot25Pay+ot50Pay+ot13+nightMajor+nightMajor13;
   // Estimation jour/semaine : inclut l'IFM et les congés payés versés, comme le calcul mensuel.
   const gross=baseGross*interimFactor();
@@ -132,7 +135,7 @@ function monthSalaryBase(key){
   let ds=[...new Set(S.punches.map(p=>p.date))].filter(d=>d.startsWith(key));
   ds.forEach(d=>{const m=daySalary(d);out.w+=m.w;out.gross+=m.baseGross;out.normal13+=m.normal13;out.team+=m.team;out.team13+=m.team13;out.habillage+=m.habillage;out.habillage13+=m.habillage13;out.ot25Pay+=m.ot25Pay;out.ot50Pay+=m.ot50Pay;out.ot13+=m.ot13;out.nightMajor+=m.nightMajor;out.nightMajor13+=m.nightMajor13;out.basket+=m.basket});
   // Primes & indemnités des réglages : comptées uniquement si l'interrupteur « Compter dans le salaire » est activé
-  // (équipe, habillage et panier sont déjà comptés automatiquement, donc pas de double comptage par défaut).
+  // (équipe, habillage et panier ont leurs propres interrupteurs automatiques).
   if(out.w>0){
     const primes=(S.settings.primes||[]).filter(p=>p.counted===true&&p.enabled!==false);
     out.taxable=primes.filter(p=>p.taxable).reduce((a,p)=>a+(Number(p.amount)||0),0);
@@ -342,10 +345,10 @@ function salary(){
   <section class="card compactSection"><div class="head"><h2>Détail du calcul</h2></div><div class="compactList">
     <div class="infoLine"><span>Heures normales (nuit incluse) × ${r.toFixed(2).replace(".",",")} € / h</span><b>${eur(tot.base)}</b></div>
     <div class="infoLine"><span>13e mois — heures normales × ${rNormal13.toFixed(2).replace(".",",")} €</span><b>${eur(tot.normal13)}</b></div>
-    <div class="infoLine"><span>Prime équipe</span><b>${eur(tot.team)}</b></div>
-    <div class="infoLine"><span>13e mois — prime équipe × ${rTeam13.toFixed(2).replace(".",",")} €</span><b>${eur(tot.team13)}</b></div>
-    <div class="infoLine"><span>Habillage</span><b>${eur(tot.habillage)}</b></div>
-    <div class="infoLine"><span>13e mois — habillage × ${rHab13.toFixed(2).replace(".",",")} €</span><b>${eur(tot.habillage13)}</b></div>
+    ${autoOn("team")?`<div class="infoLine"><span>Prime équipe</span><b>${eur(tot.team)}</b></div>
+    <div class="infoLine"><span>13e mois — prime équipe × ${rTeam13.toFixed(2).replace(".",",")} €</span><b>${eur(tot.team13)}</b></div>`:""}
+    ${autoOn("habillage")?`<div class="infoLine"><span>Habillage</span><b>${eur(tot.habillage)}</b></div>
+    <div class="infoLine"><span>13e mois — habillage × ${rHab13.toFixed(2).replace(".",",")} €</span><b>${eur(tot.habillage13)}</b></div>`:""}
     <div class="infoLine"><span>Majoration nuit (heures de nuit uniquement) × ${rNightMaj.toFixed(2).replace(".",",")} €</span><b>${eur(tot.nightMajor)}</b></div>
     <div class="infoLine"><span>13e mois — majoration nuit × ${rNightMaj13.toFixed(2).replace(".",",")} €</span><b>${eur(tot.nightMajor13)}</b></div>
     ${tot.o25?`<div class="infoLine"><span>Heures sup. +${S.settings.ot25pct}% <small>${hm(tot.o25)} × ${(Math.round(r*(1+(Number(S.settings.ot25pct)||0)/100)*100+1e-6)/100).toFixed(2).replace(".",",")} €</small></span><b>${eur(tot.ot25Pay)}</b></div>`:""}
@@ -353,7 +356,7 @@ function salary(){
     ${tot.ot13?`<div class="infoLine"><span>13e mois — heures sup.</span><b>${eur(tot.ot13)}</b></div>`:""}
     ${c.taxable?`<div class="infoLine"><span>Primes soumises à l'impôt</span><b>${eur(c.taxable)}</b></div>`:""}
     <div class="infoLine highlightRow"><span>Brut total</span><b>${eur(gross)}</b></div>
-    <div class="infoLine"><span>Panier net × 7,50 €</span><b>${eur(tot.basket)}</b></div>
+    ${autoOn("basket")?`<div class="infoLine"><span>Panier net × 7,50 €</span><b>${eur(tot.basket)}</b></div>`:""}
     ${c.nontax?`<div class="infoLine"><span>Primes non soumises à l'impôt</span><b>${eur(c.nontax)}</b></div>`:""}
   </div></section>`;
 }
@@ -361,13 +364,13 @@ function salary(){
 function settings(){return `<header><div><div class="eyebrow">CONFIGURATION</div><h1 class="title">Réglages</h1></div><div class="logo">⚙</div></header>
 <section class="card"><div class="head"><div><h2>Salaire</h2><p class="sectionNote">Modifie le taux horaire : tous les montants liés au taux se recalculent automatiquement.</p></div></div><div class="field"><label>Taux horaire normal</label><input id="rate" type="number" inputmode="decimal" step="0.01" min="0" value="${S.settings.rate}"></div><div class="subCard"><div class="head"><div><h3>Barème automatique</h3><p class="sectionNote">Les montants ci-dessous suivent le taux horaire. Le panier reste fixe.</p></div></div><div class="grid2">
 <div class="field"><label>13e mois — heures normales</label><input value="${(1.84*(S.settings.rate/13.78)).toFixed(2).replace('.',',')} € / h" disabled></div>
-<div class="field"><label>Prime équipe</label><input value="${(14.50*(S.settings.rate/13.78)).toFixed(2).replace('.',',')} € / jour" disabled></div>
-<div class="field"><label>13e mois — prime équipe</label><input value="${(1.93*(S.settings.rate/13.78)).toFixed(2).replace('.',',')} € / jour" disabled></div>
-<div class="field"><label>Habillage</label><input value="${(3.50*(S.settings.rate/13.78)).toFixed(2).replace('.',',')} € / jour" disabled></div>
-<div class="field"><label>13e mois — habillage</label><input value="${(0.47*(S.settings.rate/13.78)).toFixed(2).replace('.',',')} € / jour" disabled></div>
+<div class="field"><label>Prime équipe</label><input value="${autoOn('team')?`${(14.50*(S.settings.rate/13.78)).toFixed(2).replace('.',',')} € / jour`:'Désactivée'}" disabled></div>
+<div class="field"><label>13e mois — prime équipe</label><input value="${autoOn('team')?`${(1.93*(S.settings.rate/13.78)).toFixed(2).replace('.',',')} € / jour`:'Désactivée'}" disabled></div>
+<div class="field"><label>Habillage</label><input value="${autoOn('habillage')?`${(3.50*(S.settings.rate/13.78)).toFixed(2).replace('.',',')} € / jour`:'Désactivée'}" disabled></div>
+<div class="field"><label>13e mois — habillage</label><input value="${autoOn('habillage')?`${(0.47*(S.settings.rate/13.78)).toFixed(2).replace('.',',')} € / jour`:'Désactivée'}" disabled></div>
 <div class="field"><label>Majoration nuit</label><input value="${(6.89*(S.settings.rate/13.78)).toFixed(2).replace('.',',')} € / h" disabled></div>
 <div class="field"><label>13e mois — majoration nuit</label><input value="${(0.91*(S.settings.rate/13.78)).toFixed(2).replace('.',',')} € / h" disabled></div>
-<div class="field"><label>Panier net</label><input value="7,50 € / jour" disabled></div></div></div>
+<div class="field"><label>Panier net</label><input value="${autoOn('basket')?`7,50 € / jour`:'Désactivée'}" disabled></div></div></div>
 <div class="field"><label>Coefficient net estimé</label><input id="net" type="number" step=".01" value="${S.settings.net}"></div><div class="field"><label>Prélèvement à la source estimé (%)</label><input id="taxRate" type="number" step=".1" min="0" value="${S.settings.taxRate||0}"></div><button id="saveSalary" class="btn purple" style="width:100%">Enregistrer</button></section>
 <section class="card"><div class="head"><h2>Heures supplémentaires</h2></div><div class="field"><label>Début des heures sup. (h/semaine)</label><input id="weekly" type="number" step=".1" value="${S.settings.weekly}"></div><div class="field"><label>Fin tranche +25% (h/semaine)</label><input id="ot25" type="number" step=".1" value="${S.settings.ot25}"></div><div class="grid2"><div class="field"><label>Majoration 1 (%)</label><input id="ot25pct" type="number" value="${S.settings.ot25pct}"></div><div class="field"><label>Majoration 2 (%)</label><input id="ot50pct" type="number" value="${S.settings.ot50pct}"></div></div><button id="saveOT" class="btn purple" style="width:100%">Enregistrer</button></section>
 <section class="card nightCard"><div class="head"><h2>Nuit</h2></div><div class="nightGrid"><div class="field nightField"><label>Début</label><input id="nightStart" type="time" value="${S.settings.nightStart}"></div><div class="field nightField"><label>Fin</label><input id="nightEnd" type="time" value="${S.settings.nightEnd}"></div></div><div class="field"><label>Majoration nuit (barème)</label><input value="+${Math.round(6.89/13.78*100)} % du taux · ${(6.89*(S.settings.rate/13.78)).toFixed(2).replace('.',',')} € / h" disabled></div><button id="saveNight" class="btn purple" style="width:100%">Enregistrer</button></section>
@@ -376,7 +379,11 @@ function settings(){return `<header><div><div class="eyebrow">CONFIGURATION</div
 <div class="subCard"><div class="switchRow"><div><b>Prime de fin de mission (IFM)</b><small>Taux appliqué au brut de la période.</small></div><label class="switch"><input id="ifmEnabled" type="checkbox" ${S.settings.ifmEnabled!==false?"checked":""}><span></span></label></div><div class="field"><label>Taux IFM (%)</label><input id="ifmRate" type="number" min="0" step=".1" value="${S.settings.ifmRate}"></div><div class="field"><label>Mode</label><select id="ifmMode"><option value="pay" ${S.settings.ifmMode!=="cet"?"selected":""}>Versée avec le salaire</option><option value="cet" ${S.settings.ifmMode==="cet"?"selected":""}>Mise au CET</option></select></div></div>
 <div class="subCard"><div class="switchRow"><div><b>Indemnité de congés payés (ICCP)</b><small>Calculée selon le taux que tu définis.</small></div><label class="switch"><input id="iccpEnabled" type="checkbox" ${S.settings.iccpEnabled!==false?"checked":""}><span></span></label></div><div class="field"><label>Taux congés payés (%)</label><input id="iccpRate" type="number" min="0" step=".1" value="${S.settings.iccpRate}"></div><div class="field"><label>Mode</label><select id="iccpMode"><option value="pay" ${S.settings.iccpMode!=="cet"?"selected":""}>Versés avec le salaire</option><option value="cet" ${S.settings.iccpMode==="cet"?"selected":""}>Mis au CET</option></select></div></div>
 <div class="row"><span>IFM estimée ce mois</span><b>${eur(interimCalc(new Date().getFullYear()+"-"+pad(new Date().getMonth()+1)).ifm)}</b></div><div class="row"><span>Congés payés estimés ce mois</span><b>${eur(interimCalc(new Date().getFullYear()+"-"+pad(new Date().getMonth()+1)).iccp)}</b></div><div class="row"><span>CET cumulé</span><b>${eur(cetTotal())}</b></div><button id="saveInterim" class="btn purple" style="width:100%;margin-top:12px">Enregistrer les paramètres intérim</button></section>
-<section class="card"><div class="head"><div><h2>Primes & indemnités</h2><p class="sectionNote">Prime d'équipe, habillage et panier sont déjà comptés automatiquement : ne les ajoute pas ici. Une prime saisie ici n'entre dans le salaire que si tu actives « Compter dans le salaire ».</p></div></div><div class="primeForm"><div class="field"><label>Nom</label><input id="primeName" type="text"></div><div class="field"><label>Montant (€)</label><input id="primeAmount" type="number" inputmode="decimal" min="0" step="0.01"></div><div class="field"><label>Fiscalité</label><div class="taxChoice"><label><input type="radio" name="primeTax" value="taxable" checked><span>Soumis à l'impôt</span></label><label><input type="radio" name="primeTax" value="nontaxable"><span>Non soumis à l'impôt</span></label></div></div><button id="addPrime" type="button" class="btn purple" style="width:100%">＋ Ajouter la prime / indemnité</button></div>${S.settings.primes.length?S.settings.primes.map((p,i)=>`<div class="primeItem"><span class="primeDot"></span><div class="primeInfo"><div class="primeName">${esc(p.name)}</div><div class="primeMeta">${eur(p.amount)} · ${p.taxable?"Soumis à l'impôt":"Non soumis à l'impôt"}</div><div class="primeMeta">${p.counted===true?"Comptée dans le salaire":"Non comptée dans le salaire"}</div></div><label class="switch"><input type="checkbox" data-primecount="${i}" ${p.counted===true?"checked":""}><span></span></label><button type="button" class="btn small red" data-prime="${i}">Supprimer</button></div>`).join(""):`<div class="empty">Aucune prime ou indemnité.</div>`}</section>
+<section class="card"><div class="head"><div><h2>Primes & indemnités</h2><p class="sectionNote">Active ou coupe une prime : le calcul du salaire change tout de suite. Les primes automatiques sont comptées chaque jour travaillé.</p></div></div>
+<div class="subCard"><div class="switchRow"><div><b>Prime d'équipe</b><small>${(14.50*(S.settings.rate/13.78)).toFixed(2).replace('.',',')} € / jour travaillé + 13e mois</small></div><label class="switch"><input type="checkbox" data-auto="team" ${autoOn("team")?"checked":""}><span></span></label></div>
+<div class="switchRow" style="margin-top:10px"><div><b>Habillage</b><small>${(3.50*(S.settings.rate/13.78)).toFixed(2).replace('.',',')} € / jour travaillé + 13e mois</small></div><label class="switch"><input type="checkbox" data-auto="habillage" ${autoOn("habillage")?"checked":""}><span></span></label></div>
+<div class="switchRow" style="margin-top:10px"><div><b>Panier net</b><small>7,50 € / jour travaillé (ajouté au net)</small></div><label class="switch"><input type="checkbox" data-auto="basket" ${autoOn("basket")?"checked":""}><span></span></label></div></div>
+<p class="sectionNote" style="margin:14px 0 8px">Tes autres primes : comptées dès l'ajout. Coupe l'interrupteur pour la mettre en pause, ou supprime-la pour l'enlever.</p><div class="primeForm"><div class="field"><label>Nom</label><input id="primeName" type="text"></div><div class="field"><label>Montant (€)</label><input id="primeAmount" type="number" inputmode="decimal" min="0" step="0.01"></div><div class="field"><label>Fiscalité</label><div class="taxChoice"><label><input type="radio" name="primeTax" value="taxable" checked><span>Soumis à l'impôt</span></label><label><input type="radio" name="primeTax" value="nontaxable"><span>Non soumis à l'impôt</span></label></div></div><button id="addPrime" type="button" class="btn purple" style="width:100%">＋ Ajouter la prime / indemnité</button></div>${S.settings.primes.length?S.settings.primes.map((p,i)=>`<div class="primeItem"><span class="primeDot"></span><div class="primeInfo"><div class="primeName">${esc(p.name)}</div><div class="primeMeta">${eur(p.amount)} · ${p.taxable?"Soumis à l'impôt":"Non soumis à l'impôt"}</div><div class="primeMeta">${p.counted===true?"Comptée dans le salaire":"Non comptée dans le salaire"}</div></div><label class="switch"><input type="checkbox" data-primecount="${i}" ${p.counted===true?"checked":""}><span></span></label><button type="button" class="btn small red" data-prime="${i}">Supprimer</button></div>`).join(""):`<div class="empty">Aucune prime ou indemnité.</div>`}</section>
 <section class="card"><button id="reset" class="btn red" style="width:100%">Réinitialiser toutes les données</button></section>`}
 function esc(s){return String(s).replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#039;"}[c]))}
 function wire(){
@@ -394,7 +401,8 @@ document.querySelectorAll("[data-editday]").forEach(b=>b.onclick=e=>{if(e.target
 document.querySelectorAll("[data-delday]").forEach(b=>b.onclick=e=>{e.stopPropagation();if(confirm("Supprimer toute cette journée ?")){S.punches=S.punches.filter(p=>p.date!==b.dataset.delday);save();render();toast("Journée supprimée ✓")}});
 document.querySelectorAll("[data-delp]").forEach(b=>b.onclick=()=>{S.punches=S.punches.filter(p=>p.id!==b.dataset.delp);save();render()});
 document.querySelectorAll("[data-prime]").forEach(b=>b.onclick=()=>{S.settings.primes.splice(+b.dataset.prime,1);save();render()});
-document.querySelectorAll("[data-primecount]").forEach(b=>b.onchange=()=>{const p=S.settings.primes[+b.dataset.primecount];if(p){p.counted=b.checked;save();render();toast(b.checked?"Prime comptée ✓":"Prime non comptée ✓")}});
+document.querySelectorAll("[data-primecount]").forEach(b=>b.onchange=()=>{const p=S.settings.primes[+b.dataset.primecount];if(p){const y=window.scrollY;p.counted=b.checked;save();render();window.scrollTo(0,y);toast(b.checked?"Prime comptée ✓":"Prime non comptée ✓")}});
+document.querySelectorAll("[data-auto]").forEach(b=>b.onchange=()=>{const y=window.scrollY;S.settings.autoPrimes={...(S.settings.autoPrimes||{}),[b.dataset.auto]:b.checked};save();render();window.scrollTo(0,y);toast(b.checked?"Prime activée ✓":"Prime désactivée ✓")});
 if(q("saveSalary"))q("saveSalary").onclick=()=>{S.settings.rate=Math.max(0,+q("rate").value||13.78);S.settings.net=+q("net").value||0;S.settings.taxRate=Math.max(0,+q("taxRate").value||0);save();render();toast("Salaire enregistré ✓")};
 
 if(q("saveOT"))q("saveOT").onclick=()=>{S.settings.weekly=+q("weekly").value||35;S.settings.ot25=+q("ot25").value||43;S.settings.ot25pct=+q("ot25pct").value||25;S.settings.ot50pct=+q("ot50pct").value||50;save();render();toast("Heures sup. enregistrées ✓")};
@@ -409,7 +417,7 @@ if(q("addPrime"))q("addPrime").onclick=()=>{
   if(!name){toast("Indique le nom de la prime");q("primeName").focus();return}
   if(!Number.isFinite(amount)||amount<0){toast("Indique un montant valide");q("primeAmount").focus();return}
   const taxable=!tax||tax.value==="taxable";
-  S.settings.primes.push({id:crypto.randomUUID(),name,amount,taxable,enabled:true,counted:false});
+  S.settings.primes.push({id:crypto.randomUUID(),name,amount,taxable,enabled:true,counted:true});
   save();render();toast("Prime ajoutée ✓");
 };
 if(q("reset"))q("reset").onclick=()=>{if(confirm("Tout effacer ?")){localStorage.removeItem(KEY);location.reload()}}
