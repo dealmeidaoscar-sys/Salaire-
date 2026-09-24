@@ -1,4 +1,4 @@
-/* V54 — the primes list drives the salary: add = counted (with 13th month), delete = removed. No on/off switches. */
+/* V55 — all worked hours (night + overtime included) in the normal-hours line; night and overtime only add their bonus on separate lines */
 
 const KEY="heuresProV35";
 const OLD_KEYS=["heuresProV34","heuresProV33","heuresProV32","heuresProV31","heuresProV30","heuresProV29","heuresProV28","heuresProV27","heuresProV26","heuresProV25","heuresProV24"];
@@ -115,11 +115,10 @@ function daySalary(d){
   const scale=r/13.78;
   // Primes équipe / habillage / panier : uniquement les jours réellement travaillés.
   const day=w>0?1:0;
-  // Chaque heure travaillée est comptée UNE SEULE FOIS :
-  // - heures normales et de nuit : au taux normal (la nuit reçoit en plus sa majoration)
-  // - heures sup. : payées en entier sur leurs propres lignes (taux normal + majoration)
+  // Chaque heure travaillée est comptée UNE SEULE FOIS, au taux normal, dans la ligne des heures normales
+  // (nuit et heures sup. comprises). La nuit et les heures sup. ajoutent seulement leur majoration, à part.
   const p25=(Number(S.settings.ot25pct)||0)/100, p50=(Number(S.settings.ot50pct)||0)/100;
-  const base=Math.max(0,(w-otMin)/60)*r;
+  const base=(w/60)*r;
   // Heures normales = hors nuit et hors heures sup. (sert au 13e mois). Une heure à la fois de nuit
   // et supplémentaire n'est retirée qu'une seule fois.
   const normalHours=Math.max(0,(w-n-otMin+nightInTail(d,otMin))/60);
@@ -133,8 +132,8 @@ function daySalary(d){
   // Majorations : nuit (uniquement sur les heures de nuit) et heures sup. (+% du taux horaire).
   const nightMajor=nightHours*6.89*scale;
   const nightMajor13=nightHours*0.91*scale;
-  const ot25Pay=(o.o25/60)*r*(1+p25);
-  const ot50Pay=(o.o50/60)*r*(1+p50);
+  const ot25Major=(o.o25/60)*r*p25;
+  const ot50Major=(o.o50/60)*r*p50;
   // 13e mois sur les heures sup. : même proportion que sur les heures normales (1,84 € pour 13,78 €).
   const ot13=1.84*scale*((o.o25/60)*(1+p25)+(o.o50/60)*(1+p50));
   const basket=7.50*day*bOn;
@@ -143,19 +142,19 @@ function daySalary(d){
   const cust=day*cd.filter(p=>p.taxable).reduce((a,p)=>a+(Number(p.amount)||0),0);
   const cust13=cust*K13;
   const custNon=day*cd.filter(p=>!p.taxable).reduce((a,p)=>a+(Number(p.amount)||0),0);
-  const baseGross=base+normal13+team+team13+habillage+habillage13+ot25Pay+ot50Pay+ot13+nightMajor+nightMajor13+cust+cust13;
+  const baseGross=base+normal13+team+team13+habillage+habillage13+ot25Major+ot50Major+ot13+nightMajor+nightMajor13+cust+cust13;
   // Estimation jour/semaine : inclut l'IFM et les congés payés versés, comme le calcul mensuel.
   const gross=baseGross*interimFactor();
   const netBeforeTax=gross*S.settings.net;
   const incomeTax=Math.max(0,netBeforeTax*Number(S.settings.taxRate||0)/100);
   const netAfterTax=netBeforeTax-incomeTax;
   const estimatedNet=netAfterTax+basket+custNon;
-  return {w,n,o,normal:base,normal13,team,team13,habillage,habillage13,ot25Pay,ot50Pay,ot13,nightMajor,nightMajor13,basket,cust,cust13,custNon,baseGross,gross,netBeforeTax,incomeTax,netAfterTax,estimatedNet,ifm:0,iccp:0,paidInterim:0,cetInterim:0};
+  return {w,n,o,normal:base,normal13,team,team13,habillage,habillage13,ot25Major,ot50Major,ot13,normalHours,nightMajor,nightMajor13,basket,cust,cust13,custNon,baseGross,gross,netBeforeTax,incomeTax,netAfterTax,estimatedNet,ifm:0,iccp:0,paidInterim:0,cetInterim:0};
 }
 function monthSalaryBase(key){
-  let out={w:0,gross:0,normal13:0,team:0,team13:0,habillage:0,habillage13:0,ot25Pay:0,ot50Pay:0,ot13:0,nightMajor:0,nightMajor13:0,basket:0,th:0,taxable:0,nontax:0,days:0,rows:[],cust13:0};
+  let out={w:0,gross:0,normal13:0,team:0,team13:0,habillage:0,habillage13:0,ot25Major:0,ot50Major:0,ot13:0,nightMajor:0,nightMajor13:0,basket:0,th:0,taxable:0,nontax:0,days:0,rows:[],cust13:0};
   let ds=[...new Set(S.punches.map(p=>p.date))].filter(d=>d.startsWith(key));
-  ds.forEach(d=>{const m=daySalary(d);out.w+=m.w;if(m.w>0)out.days++;out.gross+=m.baseGross;out.normal13+=m.normal13;out.team+=m.team;out.team13+=m.team13;out.habillage+=m.habillage;out.habillage13+=m.habillage13;out.ot25Pay+=m.ot25Pay;out.ot50Pay+=m.ot50Pay;out.ot13+=m.ot13;out.nightMajor+=m.nightMajor;out.nightMajor13+=m.nightMajor13;out.basket+=m.basket});
+  ds.forEach(d=>{const m=daySalary(d);out.w+=m.w;if(m.w>0)out.days++;out.gross+=m.baseGross;out.normal13+=m.normal13;out.team+=m.team;out.team13+=m.team13;out.habillage+=m.habillage;out.habillage13+=m.habillage13;out.ot25Major+=m.ot25Major;out.ot50Major+=m.ot50Major;out.ot13+=m.ot13;out.nightMajor+=m.nightMajor;out.nightMajor13+=m.nightMajor13;out.basket+=m.basket});
   // Primes ajoutées dans les réglages : comptées dès qu'elles sont dans la liste (avec 13e mois si soumises).
   // Les primes "par jour travaillé" sont déjà dans out.gross via daySalary ; on ajoute ici les primes "par mois".
   const rows=[];
@@ -347,8 +346,8 @@ function salary(){
   const r=Math.max(0,Number(S.settings.rate)||13.78),scale=r/13.78;
   const rNormal13=1.84*scale,rTeam=14.50*scale,rTeam13=1.93*scale,rHab=3.50*scale,rHab13=0.47*scale,rNightMaj=6.89*scale,rNightMaj13=0.91*scale;
   let ds=[...new Set(S.punches.map(p=>p.date))].filter(d=>d.startsWith(mk));
-  let tot={w:0,n:0,o25:0,o50:0,base:0,ot25Pay:0,ot50Pay:0,ot13:0,normal13:0,team:0,team13:0,habillage:0,habillage13:0,nightMajor:0,nightMajor13:0,basket:0};
-  ds.forEach(d=>{const m=daySalary(d);tot.w+=m.w;tot.n+=m.n;tot.o25+=m.o.o25;tot.o50+=m.o.o50;tot.base+=m.normal;tot.ot25Pay+=m.ot25Pay;tot.ot50Pay+=m.ot50Pay;tot.ot13+=m.ot13;tot.normal13+=m.normal13;tot.team+=m.team;tot.team13+=m.team13;tot.habillage+=m.habillage;tot.habillage13+=m.habillage13;tot.nightMajor+=m.nightMajor;tot.nightMajor13+=m.nightMajor13;tot.basket+=m.basket});
+  let tot={w:0,n:0,o25:0,o50:0,base:0,nh:0,ot25Major:0,ot50Major:0,ot13:0,normal13:0,team:0,team13:0,habillage:0,habillage13:0,nightMajor:0,nightMajor13:0,basket:0};
+  ds.forEach(d=>{const m=daySalary(d);tot.w+=m.w;tot.n+=m.n;tot.o25+=m.o.o25;tot.o50+=m.o.o50;tot.base+=m.normal;tot.nh+=m.normalHours*60;tot.ot25Major+=m.ot25Major;tot.ot50Major+=m.ot50Major;tot.ot13+=m.ot13;tot.normal13+=m.normal13;tot.team+=m.team;tot.team13+=m.team13;tot.habillage+=m.habillage;tot.habillage13+=m.habillage13;tot.nightMajor+=m.nightMajor;tot.nightMajor13+=m.nightMajor13;tot.basket+=m.basket});
   let gross=c.gross,netBeforeTax=c.netBeforeTax,tax=c.tax,netAfterTax=netBeforeTax-tax,received=netAfterTax+tot.basket+c.nontax;
   let wg=0,wnet=0,ww=0,wn=0; week(iso(now)).forEach(d=>{let m=daySalary(d);wg+=m.gross;wnet+=m.estimatedNet;ww+=m.w;wn+=m.n});
   return `<header><div><div class="eyebrow">RÉMUNÉRATION</div><h1 class="title">Salaire</h1></div><div class="logo">€</div></header>
@@ -372,16 +371,16 @@ function salary(){
     ${cetTotal()?`<div class="infoLine sub"><span>CET cumulé</span><b>${eur(cetTotal())}</b></div>`:""}
   </div>${c.cetCurrent?`<button id="addCet" class="btn purple compactBtn">Mettre ce mois au CET</button>`:""}</section>
   <section class="card compactSection"><div class="head"><h2>Détail du calcul</h2></div><div class="compactList">
-    <div class="infoLine"><span>Heures normales (nuit incluse) × ${r.toFixed(2).replace(".",",")} € / h</span><b>${eur(tot.base)}</b></div>
-    <div class="infoLine"><span>13e mois — heures normales × ${rNormal13.toFixed(2).replace(".",",")} €</span><b>${eur(tot.normal13)}</b></div>
+    <div class="infoLine"><span>Heures travaillées <small>${hm(tot.w)} (nuit et heures sup. incluses)</small> × ${r.toFixed(2).replace(".",",")} € / h</span><b>${eur(tot.base)}</b></div>
+    <div class="infoLine"><span>13e mois — heures normales × ${rNormal13.toFixed(2).replace(".",",")} € <small>${hm(tot.nh)} hors nuit et hors heures sup.</small></span><b>${eur(tot.normal13)}</b></div>
     ${autoOn("team")?`<div class="infoLine"><span>Prime équipe</span><b>${eur(tot.team)}</b></div>
     <div class="infoLine"><span>13e mois — prime équipe × ${rTeam13.toFixed(2).replace(".",",")} €</span><b>${eur(tot.team13)}</b></div>`:""}
     ${autoOn("habillage")?`<div class="infoLine"><span>Habillage</span><b>${eur(tot.habillage)}</b></div>
     <div class="infoLine"><span>13e mois — habillage × ${rHab13.toFixed(2).replace(".",",")} €</span><b>${eur(tot.habillage13)}</b></div>`:""}
     <div class="infoLine"><span>Majoration nuit (heures de nuit uniquement) × ${rNightMaj.toFixed(2).replace(".",",")} €</span><b>${eur(tot.nightMajor)}</b></div>
     <div class="infoLine"><span>13e mois — majoration nuit × ${rNightMaj13.toFixed(2).replace(".",",")} €</span><b>${eur(tot.nightMajor13)}</b></div>
-    ${tot.o25?`<div class="infoLine"><span>Heures sup. +${S.settings.ot25pct}% <small>${hm(tot.o25)} × ${(Math.round(r*(1+(Number(S.settings.ot25pct)||0)/100)*100+1e-6)/100).toFixed(2).replace(".",",")} €</small></span><b>${eur(tot.ot25Pay)}</b></div>`:""}
-    ${tot.o50?`<div class="infoLine"><span>Heures sup. +${S.settings.ot50pct}% <small>${hm(tot.o50)} × ${(Math.round(r*(1+(Number(S.settings.ot50pct)||0)/100)*100+1e-6)/100).toFixed(2).replace(".",",")} €</small></span><b>${eur(tot.ot50Pay)}</b></div>`:""}
+    ${tot.o25?`<div class="infoLine"><span>Majoration heures sup. +${S.settings.ot25pct}% <small>${hm(tot.o25)} × ${r.toFixed(2).replace(".",",")} € × ${S.settings.ot25pct}%</small></span><b>${eur(tot.ot25Major)}</b></div>`:""}
+    ${tot.o50?`<div class="infoLine"><span>Majoration heures sup. +${S.settings.ot50pct}% <small>${hm(tot.o50)} × ${r.toFixed(2).replace(".",",")} € × ${S.settings.ot50pct}%</small></span><b>${eur(tot.ot50Major)}</b></div>`:""}
     ${tot.ot13?`<div class="infoLine"><span>13e mois — heures sup.</span><b>${eur(tot.ot13)}</b></div>`:""}
     ${c.rows.filter(r=>r.taxable).map(r=>`<div class="infoLine"><span>${esc(r.name)} <small>${r.per==="day"?c.days+" j × "+eur(r.amount):"par mois"}</small></span><b>${eur(r.total)}</b></div><div class="infoLine"><span>13e mois — ${esc(r.name)}</span><b>${eur(r.total13)}</b></div>`).join("")}
     <div class="infoLine highlightRow"><span>Brut total</span><b>${eur(gross)}</b></div>

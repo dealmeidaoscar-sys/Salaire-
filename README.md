@@ -1,6 +1,6 @@
-# Heures Pro V54
+# Heures Pro V55
 
-Chaque heure travaillée est comptée une seule fois au taux normal. Les heures de nuit reçoivent uniquement la majoration nuit, et les heures supplémentaires sont payées en entier sur leurs propres lignes (taux normal + majoration +25 % / +50 %, réglable) avec leur 13e mois.
+Toutes les heures travaillées (nuit et heures supplémentaires comprises) sont comptées une seule fois au taux normal dans la ligne « Heures travaillées ». Les heures de nuit et les heures supplémentaires ajoutent seulement leur majoration, sur des lignes à part (nuit ; +25 % / +50 % réglables), avec leur 13e mois.
 
 Les primes équipe, habillage et le panier ne sont comptés que les jours travaillés. Les estimations du jour et de la semaine incluent l'IFM et les congés payés versés, comme le calcul mensuel. Un poste de nuit qui passe minuit reste rattaché à son jour de début.
 
