@@ -1,4 +1,4 @@
-/* V55 — all worked hours (night + overtime included) in the normal-hours line; night and overtime only add their bonus on separate lines */
+/* V56 — 13th month on ALL worked hours; night and overtime only add their bonus (and its 13th month) on separate lines */
 
 const KEY="heuresProV35";
 const OLD_KEYS=["heuresProV34","heuresProV33","heuresProV32","heuresProV31","heuresProV30","heuresProV29","heuresProV28","heuresProV27","heuresProV26","heuresProV25","heuresProV24"];
@@ -83,22 +83,6 @@ function weekStart(d){let x=new Date(d+"T12:00:00");x.setDate(x.getDate()-((x.ge
 function week(d){let a=[],x=new Date(weekStart(d)+"T12:00:00");for(let i=0;i<7;i++){a.push(iso(x));x.setDate(x.getDate()+1)}return a}
 function ot(d){let before=0;for(let x of week(d))if(x<d)before+=work(x);let cur=work(d),n=0,o25=0,o50=0;let a=S.settings.weekly*60,b=S.settings.ot25*60,totalBefore=before,total=before+cur;let p=Math.max(0,Math.min(total,b)-Math.max(totalBefore,a));o25=p;let q=Math.max(0,total-b)-Math.max(0,totalBefore-b);o50=Math.max(0,q);let used=o25+o50;n=Math.max(0,cur-used);return{n,o25,o50}}
 function autoOn(k){return (S.settings.primes||[]).some(p=>p.builtin===k)}
-function nightInTail(d,tailMin){
-  // Minutes de nuit comprises dans les dernières `tailMin` minutes travaillées du jour (= heures sup. du jour).
-  if(tailMin<=0)return 0;
-  const iv=[];let start=null;
-  for(const p of ps(d)){
-    if(p.type==="start"||p.type==="resume")start=new Date(p.at);
-    if((p.type==="pause"||p.type==="end")&&start){iv.push([start,new Date(p.at)]);start=null;}
-  }
-  let left=tailMin,total=0;
-  for(let i=iv.length-1;i>=0&&left>0;i--){
-    const [a,b]=iv[i],len=(b-a)/60000,take=Math.min(len,left);
-    total+=nightOverlap(new Date(b.getTime()-take*60000),b);
-    left-=take;
-  }
-  return total;
-}
 function interimFactor(){
   // Coefficient IFM / congés payés versés avec le salaire (identique au calcul mensuel de interimCalc).
   const s=S.settings;
@@ -119,10 +103,8 @@ function daySalary(d){
   // (nuit et heures sup. comprises). La nuit et les heures sup. ajoutent seulement leur majoration, à part.
   const p25=(Number(S.settings.ot25pct)||0)/100, p50=(Number(S.settings.ot50pct)||0)/100;
   const base=(w/60)*r;
-  // Heures normales = hors nuit et hors heures sup. (sert au 13e mois). Une heure à la fois de nuit
-  // et supplémentaire n'est retirée qu'une seule fois.
-  const normalHours=Math.max(0,(w-n-otMin+nightInTail(d,otMin))/60);
-  const normal13=normalHours*1.84*scale;
+  // 13e mois : sur TOUTES les heures travaillées (nuit et heures sup. comprises), comme le salaire de base.
+  const normal13=(w/60)*1.84*scale;
   // Équipe / habillage / panier : comptés tant qu'ils sont dans la liste Réglages > Primes & indemnités.
   const tOn=autoOn("team")?1:0, hOn=autoOn("habillage")?1:0, bOn=autoOn("basket")?1:0;
   const team=14.50*scale*day*tOn;
@@ -134,8 +116,8 @@ function daySalary(d){
   const nightMajor13=nightHours*0.91*scale;
   const ot25Major=(o.o25/60)*r*p25;
   const ot50Major=(o.o50/60)*r*p50;
-  // 13e mois sur les heures sup. : même proportion que sur les heures normales (1,84 € pour 13,78 €).
-  const ot13=1.84*scale*((o.o25/60)*(1+p25)+(o.o50/60)*(1+p50));
+  // 13e mois de la majoration des heures sup. uniquement (les heures elles-mêmes sont dans le 13e des heures normales).
+  const ot13=1.84*scale*((o.o25/60)*p25+(o.o50/60)*p50);
   const basket=7.50*day*bOn;
   // Primes ajoutées par l'utilisateur, "par jour travaillé" : + leur 13e mois si soumises à l'impôt.
   const cd=(S.settings.primes||[]).filter(p=>!p.builtin&&p.per==="day"&&p.enabled!==false);
@@ -149,7 +131,7 @@ function daySalary(d){
   const incomeTax=Math.max(0,netBeforeTax*Number(S.settings.taxRate||0)/100);
   const netAfterTax=netBeforeTax-incomeTax;
   const estimatedNet=netAfterTax+basket+custNon;
-  return {w,n,o,normal:base,normal13,team,team13,habillage,habillage13,ot25Major,ot50Major,ot13,normalHours,nightMajor,nightMajor13,basket,cust,cust13,custNon,baseGross,gross,netBeforeTax,incomeTax,netAfterTax,estimatedNet,ifm:0,iccp:0,paidInterim:0,cetInterim:0};
+  return {w,n,o,normal:base,normal13,team,team13,habillage,habillage13,ot25Major,ot50Major,ot13,nightMajor,nightMajor13,basket,cust,cust13,custNon,baseGross,gross,netBeforeTax,incomeTax,netAfterTax,estimatedNet,ifm:0,iccp:0,paidInterim:0,cetInterim:0};
 }
 function monthSalaryBase(key){
   let out={w:0,gross:0,normal13:0,team:0,team13:0,habillage:0,habillage13:0,ot25Major:0,ot50Major:0,ot13:0,nightMajor:0,nightMajor13:0,basket:0,th:0,taxable:0,nontax:0,days:0,rows:[],cust13:0};
@@ -346,8 +328,8 @@ function salary(){
   const r=Math.max(0,Number(S.settings.rate)||13.78),scale=r/13.78;
   const rNormal13=1.84*scale,rTeam=14.50*scale,rTeam13=1.93*scale,rHab=3.50*scale,rHab13=0.47*scale,rNightMaj=6.89*scale,rNightMaj13=0.91*scale;
   let ds=[...new Set(S.punches.map(p=>p.date))].filter(d=>d.startsWith(mk));
-  let tot={w:0,n:0,o25:0,o50:0,base:0,nh:0,ot25Major:0,ot50Major:0,ot13:0,normal13:0,team:0,team13:0,habillage:0,habillage13:0,nightMajor:0,nightMajor13:0,basket:0};
-  ds.forEach(d=>{const m=daySalary(d);tot.w+=m.w;tot.n+=m.n;tot.o25+=m.o.o25;tot.o50+=m.o.o50;tot.base+=m.normal;tot.nh+=m.normalHours*60;tot.ot25Major+=m.ot25Major;tot.ot50Major+=m.ot50Major;tot.ot13+=m.ot13;tot.normal13+=m.normal13;tot.team+=m.team;tot.team13+=m.team13;tot.habillage+=m.habillage;tot.habillage13+=m.habillage13;tot.nightMajor+=m.nightMajor;tot.nightMajor13+=m.nightMajor13;tot.basket+=m.basket});
+  let tot={w:0,n:0,o25:0,o50:0,base:0,ot25Major:0,ot50Major:0,ot13:0,normal13:0,team:0,team13:0,habillage:0,habillage13:0,nightMajor:0,nightMajor13:0,basket:0};
+  ds.forEach(d=>{const m=daySalary(d);tot.w+=m.w;tot.n+=m.n;tot.o25+=m.o.o25;tot.o50+=m.o.o50;tot.base+=m.normal;tot.ot25Major+=m.ot25Major;tot.ot50Major+=m.ot50Major;tot.ot13+=m.ot13;tot.normal13+=m.normal13;tot.team+=m.team;tot.team13+=m.team13;tot.habillage+=m.habillage;tot.habillage13+=m.habillage13;tot.nightMajor+=m.nightMajor;tot.nightMajor13+=m.nightMajor13;tot.basket+=m.basket});
   let gross=c.gross,netBeforeTax=c.netBeforeTax,tax=c.tax,netAfterTax=netBeforeTax-tax,received=netAfterTax+tot.basket+c.nontax;
   let wg=0,wnet=0,ww=0,wn=0; week(iso(now)).forEach(d=>{let m=daySalary(d);wg+=m.gross;wnet+=m.estimatedNet;ww+=m.w;wn+=m.n});
   return `<header><div><div class="eyebrow">RÉMUNÉRATION</div><h1 class="title">Salaire</h1></div><div class="logo">€</div></header>
@@ -372,7 +354,7 @@ function salary(){
   </div>${c.cetCurrent?`<button id="addCet" class="btn purple compactBtn">Mettre ce mois au CET</button>`:""}</section>
   <section class="card compactSection"><div class="head"><h2>Détail du calcul</h2></div><div class="compactList">
     <div class="infoLine"><span>Heures travaillées <small>${hm(tot.w)} (nuit et heures sup. incluses)</small> × ${r.toFixed(2).replace(".",",")} € / h</span><b>${eur(tot.base)}</b></div>
-    <div class="infoLine"><span>13e mois — heures normales × ${rNormal13.toFixed(2).replace(".",",")} € <small>${hm(tot.nh)} hors nuit et hors heures sup.</small></span><b>${eur(tot.normal13)}</b></div>
+    <div class="infoLine"><span>13e mois — heures normales × ${rNormal13.toFixed(2).replace(".",",")} € <small>${hm(tot.w)} — nuit et heures sup. comprises</small></span><b>${eur(tot.normal13)}</b></div>
     ${autoOn("team")?`<div class="infoLine"><span>Prime équipe</span><b>${eur(tot.team)}</b></div>
     <div class="infoLine"><span>13e mois — prime équipe × ${rTeam13.toFixed(2).replace(".",",")} €</span><b>${eur(tot.team13)}</b></div>`:""}
     ${autoOn("habillage")?`<div class="infoLine"><span>Habillage</span><b>${eur(tot.habillage)}</b></div>
@@ -381,7 +363,7 @@ function salary(){
     <div class="infoLine"><span>13e mois — majoration nuit × ${rNightMaj13.toFixed(2).replace(".",",")} €</span><b>${eur(tot.nightMajor13)}</b></div>
     ${tot.o25?`<div class="infoLine"><span>Majoration heures sup. +${S.settings.ot25pct}% <small>${hm(tot.o25)} × ${r.toFixed(2).replace(".",",")} € × ${S.settings.ot25pct}%</small></span><b>${eur(tot.ot25Major)}</b></div>`:""}
     ${tot.o50?`<div class="infoLine"><span>Majoration heures sup. +${S.settings.ot50pct}% <small>${hm(tot.o50)} × ${r.toFixed(2).replace(".",",")} € × ${S.settings.ot50pct}%</small></span><b>${eur(tot.ot50Major)}</b></div>`:""}
-    ${tot.ot13?`<div class="infoLine"><span>13e mois — heures sup.</span><b>${eur(tot.ot13)}</b></div>`:""}
+    ${tot.ot13?`<div class="infoLine"><span>13e mois — majoration heures sup.</span><b>${eur(tot.ot13)}</b></div>`:""}
     ${c.rows.filter(r=>r.taxable).map(r=>`<div class="infoLine"><span>${esc(r.name)} <small>${r.per==="day"?c.days+" j × "+eur(r.amount):"par mois"}</small></span><b>${eur(r.total)}</b></div><div class="infoLine"><span>13e mois — ${esc(r.name)}</span><b>${eur(r.total13)}</b></div>`).join("")}
     <div class="infoLine highlightRow"><span>Brut total</span><b>${eur(gross)}</b></div>
     ${autoOn("basket")?`<div class="infoLine"><span>Panier net × 7,50 €</span><b>${eur(tot.basket)}</b></div>`:""}
